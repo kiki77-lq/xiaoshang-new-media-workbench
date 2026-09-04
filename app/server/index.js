@@ -1,0 +1,192 @@
+import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import http from "node:http";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { loadConfig } from "./config.js";
+import { openDatabase } from "./db/connection.js";
+import { getSchemaVersion, runMigrations } from "./db/migrate.js";
+import { appendAuditLog } from "./repositories/audit-repository.js";
+import { loadOrCreateSecrets, rotateToken } from "./security/secrets.js";
+import { authenticateRequest } from "./http/auth.js";
+import { readJson } from "./http/body.js";
+import { HttpError } from "./http/errors.js";
+import { sendData, sendError } from "./http/response.js";
+import { createRouter } from "./http/router.js";
+
+const MIME_TYPES = {
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webmanifest": "application/manifest+json; charset=utf-8"
+};
+
+function resolveGitSha(projectRoot) {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: projectRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch {
+    throw new Error("GIT_SHA_UNAVAILABLE");
+  }
+}
+
+function checkDatabase(db) {
+  return db.prepare("PRAGMA quick_check").get().quick_check === "ok" ? "ok" : "error";
+}
+
+function decodeRequestPath(req) {
+  const rawPath = (req.url || "/").split("?")[0];
+  try {
+    return decodeURIComponent(rawPath);
+  } catch {
+    throw new HttpError(400, "INVALID_PATH", "Request path is not valid URL encoding.");
+  }
+}
+
+function serveStatic(req, res, config, pathname) {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    throw new HttpError(405, "METHOD_NOT_ALLOWED", "Only GET and HEAD are allowed for static files.");
+  }
+  if (pathname.includes("\0")) {
+    throw new HttpError(400, "INVALID_PATH", "Request path contains an invalid character.");
+  }
+
+  const relativePath = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
+  const target = path.resolve(config.appDir, relativePath);
+  const appPrefix = `${path.resolve(config.appDir)}${path.sep}`;
+  if (target !== path.resolve(config.appDir) && !target.startsWith(appPrefix)) {
+    throw new HttpError(403, "PATH_FORBIDDEN", "Requested path is outside the application directory.");
+  }
+  if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
+    throw new HttpError(404, "NOT_FOUND", "File not found.");
+  }
+
+  const content = fs.readFileSync(target);
+  res.writeHead(200, {
+    "content-type": MIME_TYPES[path.extname(target)] || "application/octet-stream",
+    "content-length": content.length
+  });
+  if (req.method === "HEAD") return res.end();
+  res.end(content);
+}
+
+function buildRouter(config, db) {
+  const router = createRouter();
+
+  router.add("GET", "/api/v1/health", async (_req, res, context) => {
+    sendData(res, 200, {
+      status: "ok",
+      database: checkDatabase(db),
+      schemaVersion: getSchemaVersion(db),
+      gitSha: config.gitSha
+    }, { requestId: context.requestId });
+  });
+
+  router.add("GET", "/api/v1/meta", async (_req, res, context) => {
+    sendData(res, 200, {
+      appVersion: config.appVersion,
+      schemaVersion: getSchemaVersion(db),
+      gitSha: config.gitSha,
+      upstreamSha: config.upstreamSha
+    }, { requestId: context.requestId });
+  });
+
+  router.add("POST", "/api/v1/workbuddy/token/rotate", async (req, res, context) => {
+    const principal = authenticateRequest(req, config);
+    await readJson(req, config.bodyLimitBytes);
+    const rotated = rotateToken({ dataDir: config.dataDir });
+    config.authToken = rotated.token;
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      appendAuditLog({
+        db,
+        actor: principal.actor,
+        action: "workbuddy.token.rotate",
+        entityType: "system",
+        entityId: null,
+        requestId: context.requestId,
+        after: { rotatedAt: rotated.rotatedAt }
+      });
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    sendData(res, 200, {
+      rotated: true,
+      rotatedAt: rotated.rotatedAt
+    }, { requestId: context.requestId });
+  });
+
+  return router;
+}
+
+export function createWorkbenchServer({ config, db }) {
+  const router = buildRouter(config, db);
+  return http.createServer(async (req, res) => {
+    const requestId = randomUUID();
+    try {
+      const pathname = decodeRequestPath(req);
+      if (pathname.startsWith("/api/v1")) {
+        const handled = await router.dispatch(req, res, { pathname, requestId });
+        if (!handled) throw new HttpError(404, "NOT_FOUND", "API route not found.");
+        return;
+      }
+      serveStatic(req, res, config, pathname);
+    } catch (error) {
+      if (!res.headersSent) sendError(res, error, requestId);
+      else res.end();
+    }
+  });
+}
+
+export async function prepareWorkbench({
+  projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."),
+  env = process.env,
+  migrationDir
+} = {}) {
+  const config = loadConfig({ projectRoot, env });
+  for (const directory of [config.dataDir, config.backupsDir, config.importsDir, config.logsDir]) {
+    fs.mkdirSync(directory, { recursive: true });
+  }
+  const secrets = loadOrCreateSecrets({ dataDir: config.dataDir });
+  config.authToken = secrets.token;
+  config.gitSha ||= resolveGitSha(config.projectRoot);
+  const db = openDatabase({ dbPath: config.dbPath });
+  try {
+    runMigrations(db, migrationDir ? { migrationDir } : undefined);
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+  return { config, db };
+}
+
+export async function startWorkbench(options = {}) {
+  const { config, db } = await prepareWorkbench(options);
+  const server = createWorkbenchServer({ config, db });
+  server.listen(config.port, config.host, () => {
+    console.log(`Xiaoshang workbench listening on http://${config.host}:${config.port}`);
+    console.log(`Database: ${config.dbPath}`);
+  });
+  server.on("close", () => db.close());
+  return { config, db, server };
+}
+
+const isDirectRun = process.argv[1]
+  && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+if (isDirectRun) {
+  startWorkbench().catch((error) => {
+    console.error(`Startup failed: ${error.message}`);
+    process.exitCode = 1;
+  });
+}

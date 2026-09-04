@@ -2,7 +2,8 @@
 /data/
 /app/data/
 
-# The upstream checkout is a local, read-only audit baseline.
+# Read-only upstream evidence and extracted runnable baseline.
+/references/upstream-skill-repo/
 /references/v24-source/
 
 # Local secrets and machine-specific configuration.
@@ -23,4 +24,3 @@ build/
 coverage/
 *.log
 .DS_Store
-

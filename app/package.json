@@ -1,0 +1,17 @@
+{
+  "name": "xiaoshang-new-media-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test tests/unit/*.test.js tests/integration/*.test.js tests/contract/*.test.js",
+    "test:unit": "node --disable-warning=ExperimentalWarning --test tests/unit/*.test.js",
+    "test:integration": "node --disable-warning=ExperimentalWarning --test tests/integration/*.test.js",
+    "test:contract": "node --disable-warning=ExperimentalWarning --test tests/contract/*.test.js",
+    "check": "node --check server/index.js && node --check server.js && node --check sw.js"
+  }
+}

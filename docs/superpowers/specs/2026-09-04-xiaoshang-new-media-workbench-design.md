@@ -24,18 +24,18 @@
 
 | 项目 | 已确认状态 |
 |---|---|
-| 新项目根目录 | `/Users/macbook/Desktop/工作/小商的拍车日记/xiaoshang-new-media-workbench/` |
+| 新项目根目录 | `/Users/macbook/Desktop/工作/小商的拍车日记/小商新媒体运营工作台/` |
 | 上游仓库 | `https://github.com/BaiShui-xss/baishui-zmt-v24` |
 | 上游分支 | `main` |
 | 上游提交 | `d8f8e5b2d10c193d0ea0bf3581e41cc34490e55b` |
 | 提交时间 | `2026-08-08T22:38:51+08:00` |
-| 上游只读仓库 | `references/v24-source/` |
-| 上游真正的应用源码 | `references/v24-source/references/v24-source/` |
+| 上游完整只读仓库 | `references/upstream-skill-repo/` |
+| 提取后的可运行只读基准 | `references/v24-source/` |
 | 独立开发副本 | `app/` |
 | 复制校验 | `diff -qr` 无差异 |
 | upstream push | 已设置为 `DISABLED` |
 
-GitHub 仓库根目录本身是一个 WorkBuddy Skill 包装层。真正可运行的 v24 应用位于仓库内部的 `references/v24-source/`。因此 `app/` 必须从该内层目录复制，不能从仓库根目录复制。
+GitHub 仓库根目录本身是一个 WorkBuddy Skill 包装层。`references/upstream-skill-repo/` 永久保存这份完整证据，仓库内部真正可运行的应用已原样提取到 `references/v24-source/`。两个目录都只读；业务开发只发生在 `app/`。
 
 ### 2.2 原型
 
@@ -371,6 +371,8 @@ PRAGMA synchronous = FULL;
 ## 7. 最终数据模型
 
 所有 ID 使用 `crypto.randomUUID()` 生成的 UUID 文本；时间使用 UTC ISO 8601；布尔值在 SQLite 中使用 `0/1`；所有业务表包含 `created_at`、`updated_at` 和 `version`。
+
+分析与系统基础实体命名冻结为：`metric_snapshots`、`metric_values`、`metric_series_points`、`content_reviews`、`review_findings`、`report_snapshots`、`idempotency_keys`、`audit_log`。不得另建 `metric_definitions`、`metric_series`、`reports`、`audit_events` 等意义重复的表。
 
 ### 7.1 基础配置
 
@@ -745,7 +747,7 @@ WorkBuddy 的确认话术必须包含：
 ## 10. 目标文件结构
 
 ```text
-xiaoshang-new-media-workbench/
+小商新媒体运营工作台/
 ├── .gitignore
 ├── README.md
 ├── app/
@@ -823,6 +825,7 @@ xiaoshang-new-media-workbench/
 │       └── plans/
 ├── references/
 │   ├── V24_BASELINE.md
+│   ├── upstream-skill-repo/
 │   └── v24-source/
 ├── scripts/
 │   ├── install-local.sh

@@ -1,5 +1,5 @@
 /* 新媒体运营工作台 — Service Worker（离线缓存 App 外壳） */
-const CACHE = "ops-v24";
+const CACHE = "ops-foundation-v1";
 const ASSETS = [
   "/",
   "/index.html",
@@ -27,6 +27,11 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+  const url = new URL(e.request.url);
+  if (url.pathname.startsWith("/api/")) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then(r =>
       r || fetch(e.request).then(resp => {

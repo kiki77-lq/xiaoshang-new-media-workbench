@@ -1,86 +1,144 @@
-# 新媒体运营工作台 · Phase 1
+# 小商新媒体运营工作台 · PHASE 1 数据与 API 底座
 
-集中管理多个新媒体账号的日常运营：备忘录、待办事项、提醒事项、多账号面板。
-纯本地优先（数据存浏览器），支持 JSON 备份、PWA 安装到手机、响应式（手机/电脑）。
+当前阶段只提供本地 Node、SQLite、`/api/v1`、安全与备份基础设施。正式业务页面尚未实现；目录中原有 v24 页面仅是开发副本，不代表新产品页面已经完成，也不得作为真实业务数据入口。
 
-## 目录结构
-```
-index.html              入口页面
-assets/css/style.css    样式（纯黑 + 中性深灰层级）
-assets/js/store.js      数据层：状态、本地持久化、JSON 导入导出
-assets/js/app.js        UI 层：渲染、导航、弹窗、折叠、备份、PWA 注册
-manifest.webmanifest    PWA 清单（安装到手机用）
-sw.js                    Service Worker（离线缓存）
-serve.js                 零依赖本地静态服务器
-gen_icons.py             图标生成脚本（纯标准库）
-prototype.html           设计原型（参考，非正式入口）
-```
+## 环境与启动
 
-## 运行
-### 方式 A · 同步模式（推荐，多设备同步）
+- Node：仅支持 `24.x`
+- 默认监听：`127.0.0.1:5173`
+- 默认数据库：项目根目录 `data/workbench.sqlite`
+- API 根路径：`/api/v1`
+
 ```bash
-node --experimental-sqlite server.js        # 默认 5173，可加端口参数
+cd "/Users/macbook/Desktop/工作/小商的拍车日记/小商新媒体运营工作台/app"
+npm start
 ```
-- 若同级 `certs/` 存在 `key.pem` + `cert.pem`，自动以 **HTTPS** 启动；否则回退 HTTP。
-- 启动后电脑 / 手机均访问该地址；数据存服务器 `data/ops.db`（SQLite），多端实时同步。
-- 手机同 WiFi 访问 `https://<Mac内网IP>:5173` → 添加到主屏幕即像 App 安装（详见下文）。
 
-### 方式 B · 纯本地（无后端，仅本机 localStorage）
+兼容入口仍可使用：
+
 ```bash
-node serve.js            # 或 python3 -m http.server 5173
+node server.js
 ```
 
-> 直接双击 index.html（file://）也能用，但同步与 PWA 安装需经服务器地址访问。
+启动顺序固定为：校验 Node → 创建数据子目录 → 安全生成/读取 Token → 打开 SQLite → 完成 migration → 开放 HTTP 端口。迁移失败时不会监听端口。
 
-## 安装到手机（像普通 App）
-服务同时监听两个端口：**HTTPS `:5173`（手机用）** 与 **HTTP `:5174`（Mac 本机 / 内置预览用，零证书摩擦）**。
+## 数据目录
 
-### Mac 本机 / 内置预览（推荐，立刻能开）
-直接访问 **`http://localhost:5174`** —— 走 HTTP，没有证书警告，WorkBuddy 内置预览也能正常渲染。
-（如需 `https://localhost:5173` 也行，浏览器点「继续」即可，可在钥匙串信任 `certs/cert.pem` 消除警告。）
+真实数据只能放在项目根 `data/`：
 
-### 手机（像 App 安装，HTTPS 安全上下文）
-1. 手机与电脑连同一 WiFi。
-2. 手机浏览器访问 `https://<你 Mac 的内网 IP>:5173`（Mac 上 `ifconfig | grep inet` 查 IP，当前为 `192.168.1.83`）。
-3. 首次打开会提示「此连接非私密」→ 点 **「显示详情 / 仍要访问」**（iOS 在地址栏左侧点「高级」再点「访问此网站」）。
-4. 信任证书（一次性）：iPhone `设置 → 通用 → VPN与设备管理 → 找到「运营台本地服务」→ 信任`。
-5. 浏览器菜单 → **「添加到主屏幕」**（iOS Safari / Android Chrome）。
-6. 桌面出现图标，点开即全屏独立运行，且因 HTTPS 是安全上下文，**离线 Service Worker 真正生效**。
+```text
+data/
+├── workbench.sqlite
+├── workbench.sqlite-wal
+├── workbench.sqlite-shm
+├── secrets.json
+├── backups/
+├── imports/
+└── logs/
+```
 
-> Mac 本机优先用 **`http://localhost:5174`**（无证书警告）；如需 HTTPS 访问 `https://localhost:5173`，浏览器点「继续」并可在钥匙串信任 `certs/cert.pem` 消除警告。
+整个目录以及 `app/data/` 都被 Git 忽略。可用 `WORKBENCH_DATA_DIR` 指向另一个本地持久目录，但配置会拒绝任何位于 `app/` 内的路径。
 
-## 数据备份与恢复
-- 顶栏 **⬇ 备份**：导出当前全部数据为 `ops-backup-日期.json`。
-- 顶栏 **⬆ 导入**：选择备份文件，覆盖恢复（会先确认）。
-- 建议定期导出，配合 Mac 的 Time Machine，可基本消除数据丢失风险。
+`data/secrets.json` 自动以 `0600` 权限创建。Token 不会写入日志、HTTP 响应、测试 fixture 或 Git。
 
-## 功能速览
-- **多账号面板**：账号矩阵，含待办完成率、临近截止、今日发布、备忘录数。
-- **备忘录**：灵感/选题/想法，支持置顶、标签、按账号归属。
-- **待办事项**：按账号分类，优先级（高/中/低）、截止日期、完成勾选。
-- **提醒事项**：内容发布 / 数据复盘 / 自定义，支持触发时间与重复。
-- **账号切换面板**：左侧可折叠，切换「全部账号 / 单账号」视图；折叠后仍可快速选账号。
+## SQLite
 
-## 手机端常见问题
+连接启动时设置：
 
-### 1. 证书风险警告 / 需要信任证书
-服务使用自签证书（`certs/key.pem` + `certs/cert.pem`，用 `openssl` 生成）。手机首次访问需：
-- 浏览器点「仍要访问」；
-- iPhone `设置 → 通用 → VPN与设备管理` 信任该描述文件（一次性）。
+```sql
+PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
+PRAGMA busy_timeout = 5000;
+PRAGMA synchronous = FULL;
+```
 
-证书有效期 825 天。若 Mac 内网 IP 变更（路由器重拨），旧证书的 IP SAN 不匹配，需重新生成：删掉 `certs/` 下文件后用同样命令生成，并 `launchctl kickstart` 重载服务。
+当前 schema 版本是 `1`。`001_core.sql` 创建核心业务关系、`idempotency_keys` 和 `audit_log`；分析与报告表按已冻结名称在后续对应 migration 中加入，不会创建同义表。
 
-### 2. 手机浏览器里顶栏文字变成竖排
-小屏下顶栏已改为垂直堆叠（标题在上、按钮在下换行），避免标题区被按钮挤成单字换行。如仍遇到，请删除主屏幕图标后重新添加。
+Migration 使用 SHA-256 校验和，只执行一次，并在事务内完成。已执行 SQL 被修改时启动会报 `MIGRATION_CHECKSUM_DRIFT`。
 
-### 3. 之前用 HTTP 添加的旧图标打不开
-旧图标记录的是 `http://` 地址，与现在 HTTPS 不匹配。删除旧图标，按上方「安装到手机」步骤重新添加即可。
+## 已实现 API
 
-## 后续路线
-- ~~Phase 2：Node + SQLite 同步后端（已完成，node:sqlite 零依赖）~~
-- Phase 3：发布日历、数据看板、选题素材库、周/月报生成。
-- Phase 4：平台 API 自动拉数、团队协作交接、可视化深化。
+### `GET /api/v1/health`
 
-> 同步说明：后端为唯一真源，本地 localStorage 作离线缓存。单人使用采用 last-write-wins；
-> 离线编辑会在重新连上后端后自动拉取/推送。如需远程（不在同一 WiFi）同步，可在 Mac 上用
-> 内网穿透（如 Cloudflare tunnel）或部署到免费云平台。
+返回进程、SQLite、schema 和 Git SHA 健康信息，不返回 Token：
+
+```json
+{
+  "data": {
+    "status": "ok",
+    "database": "ok",
+    "schemaVersion": 1,
+    "gitSha": "40-character-sha"
+  },
+  "meta": {
+    "requestId": "uuid"
+  }
+}
+```
+
+### `GET /api/v1/meta`
+
+返回应用版本、schema 版本、当前 Git SHA 和固定 upstream SHA。
+
+### `POST /api/v1/workbuddy/token/rotate`
+
+轮换本地 Token，只返回轮换状态和时间，不返回新 Token。无浏览器 `Origin` 时必须使用：
+
+```text
+Authorization: Bearer <local-token>
+```
+
+同源浏览器写请求必须带合法 `Origin`；跨域 Origin 返回 `403 ORIGIN_FORBIDDEN`。默认 JSON 请求体上限为 2 MB，超限返回 `413 PAYLOAD_TOO_LARGE`。
+
+## API 响应契约
+
+成功：
+
+```json
+{
+  "data": {},
+  "meta": {
+    "requestId": "uuid"
+  }
+}
+```
+
+错误：
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Human-readable message",
+    "details": []
+  },
+  "requestId": "uuid"
+}
+```
+
+后续创建/转换请求使用 `Idempotency-Key`。同一个键和同一个请求只执行一次；键被不同请求复用时返回 `IDEMPOTENCY_KEY_REUSED`。后续 PATCH 必须提交读取时的 `version`，旧版本返回 `409 VERSION_CONFLICT`。所有写操作在事务中记录 `audit_log`，敏感字段会脱敏。
+
+完整机器可读契约见 `server/openapi.yaml`。
+
+## 备份与恢复底座
+
+`server/services/backup-service.js` 已提供：
+
+- SQLite 一致性备份；
+- SHA-256 清单；
+- `PRAGMA integrity_check`；
+- `pre-update` 和 `pre-restore` 类型；
+- 临时数据库验证；
+- 原子替换与失败回滚。
+
+PHASE 1 只完成并测试服务层骨架，暂不提供正式设置页面。
+
+## 测试与健康检查
+
+```bash
+npm test
+npm run check
+node ../scripts/health-check.mjs
+```
+
+测试数据库、Token 与备份均创建在操作系统临时目录，绝不使用项目根真实 `data/`。

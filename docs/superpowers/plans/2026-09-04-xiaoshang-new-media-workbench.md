@@ -12,8 +12,8 @@
 
 ## Global Constraints
 
-- 项目根目录固定为 `/Users/macbook/Desktop/工作/小商的拍车日记/xiaoshang-new-media-workbench/`。
-- `references/v24-source/` 是只读上游基线，禁止修改。
+- 项目根目录固定为 `/Users/macbook/Desktop/工作/小商的拍车日记/小商新媒体运营工作台/`。
+- `references/upstream-skill-repo/` 是原作者 GitHub 完整只读证据，`references/v24-source/` 是提取后的可运行只读基准；两者都禁止修改。
 - 业务开发只修改 `app/`、`scripts/`、`workbuddy/` 和新项目自己的文档。
 - 真实运营数据只放在项目根 `data/`，整个目录不得进入 Git。
 - 固定一个 IP“小商的拍车日记”和四个平台：抖音、视频号、小红书、微博。
@@ -26,17 +26,18 @@
 - PWA 不缓存任何 `/api/` 响应。
 - 数据迁移前必须创建并验证备份。
 - 每个 PHASE 完成后停止，取得用户确认后才执行下一阶段。
+- 分析与系统表名冻结为 `metric_snapshots`、`metric_values`、`metric_series_points`、`content_reviews`、`review_findings`、`report_snapshots`、`idempotency_keys`、`audit_log`，禁止创建同义重复表。
 
 ---
 
 ## 执行前统一检查
 
-- [ ] **Step 1: 核对当前分支与工作区**
+- [x] **Step 1: 核对当前分支与工作区**
 
 Run:
 
 ```bash
-cd "/Users/macbook/Desktop/工作/小商的拍车日记/xiaoshang-new-media-workbench"
+cd "/Users/macbook/Desktop/工作/小商的拍车日记/小商新媒体运营工作台"
 git status --short --branch
 git rev-parse --show-toplevel
 ```
@@ -44,18 +45,20 @@ git rev-parse --show-toplevel
 Expected:
 
 ```text
-项目根指向 xiaoshang-new-media-workbench
+项目根指向 小商新媒体运营工作台
 没有与当前阶段无关的未提交修改
 ```
 
-- [ ] **Step 2: 核对只读上游基线**
+- [x] **Step 2: 核对只读上游基线**
 
 Run:
 
 ```bash
-git -C references/v24-source rev-parse HEAD
-git -C references/v24-source status --short
-git -C references/v24-source remote -v
+git -C references/upstream-skill-repo rev-parse HEAD
+git -C references/upstream-skill-repo status --short
+git -C references/upstream-skill-repo remote -v
+diff -qr references/upstream-skill-repo/references/v24-source references/v24-source
+diff -qr references/v24-source app
 ```
 
 Expected:
@@ -64,9 +67,10 @@ Expected:
 d8f8e5b2d10c193d0ea0bf3581e41cc34490e55b
 工作树无修改
 upstream 的 push URL 为 DISABLED
+两次 diff 均无输出
 ```
 
-- [ ] **Step 3: 核对数据隔离**
+- [x] **Step 3: 核对数据隔离**
 
 Run:
 
@@ -107,6 +111,8 @@ git ls-files data 无输出
 - Create: `app/server/openapi.yaml`
 - Create: `app/server/services/backup-service.js`
 - Create: `app/server/services/idempotency-service.js`
+- Create: `app/server/services/optimistic-lock-service.js`
+- Create: `app/server/security/secrets.js`
 - Create: `app/server/repositories/audit-repository.js`
 - Create: `app/tests/helpers/temp-workbench.js`
 - Create: `app/tests/unit/config.test.js`
@@ -114,6 +120,10 @@ git ls-files data 无输出
 - Create: `app/tests/integration/health-api.test.js`
 - Create: `app/tests/integration/auth-api.test.js`
 - Create: `app/tests/integration/backup-service.test.js`
+- Create: `app/tests/integration/foundation-services.test.js`
+- Create: `app/tests/integration/security-api.test.js`
+- Create: `app/tests/contract/api-envelope.test.js`
+- Create: `app/tests/unit/service-worker.test.js`
 - Create: `scripts/health-check.mjs`
 - Modify: `app/server.js`
 - Modify: `app/README.md`
@@ -126,12 +136,15 @@ git ls-files data 无输出
 - Produces: `createWorkbenchServer({ config, db }) -> http.Server`
 - Produces: `createBackup({ db, dataDir, reason, appVersion }) -> BackupManifest`
 - Produces: `verifyBackup({ sqlitePath, manifestPath }) -> VerificationResult`
+- Produces: `restoreBackup({ db, dbPath, dataDir, manifest, appVersion }) -> RestoreResult`
 - Produces: `withIdempotency({ db, key, method, path, requestBody, execute })`
+- Produces: `assertVersion({ expectedVersion, actualVersion })`
+- Produces: `loadOrCreateSecrets({ dataDir })` and `rotateToken({ dataDir })`
 - Consumes: project root `data/` and Node 24.x.
 
 ### Steps
 
-- [ ] **Step 1: 建立 Node 项目与命令**
+- [x] **Step 1: 建立 Node 项目与命令**
 
 Create `app/package.json` with these scripts and runtime rules:
 
@@ -149,7 +162,7 @@ Create `app/package.json` with these scripts and runtime rules:
     "test:unit": "node --test tests/unit/*.test.js",
     "test:integration": "node --test tests/integration/*.test.js",
     "test:e2e": "playwright test",
-    "check": "node --check server/index.js && node --check assets/js/main.js"
+    "check": "node --check server/index.js && node --check server.js && node --check sw.js"
   }
 }
 ```
@@ -160,7 +173,7 @@ Keep `app/server.js` as a compatibility launcher:
 import "./server/index.js";
 ```
 
-- [ ] **Step 2: 先写数据目录测试**
+- [x] **Step 2: 先写数据目录测试**
 
 Create `app/tests/unit/config.test.js`:
 
@@ -199,7 +212,7 @@ npm test -- --test-name-pattern="database"
 
 Expected: FAIL because `server/config.js` does not exist.
 
-- [ ] **Step 3: 实现配置与启动前检查**
+- [x] **Step 3: 实现配置与启动前检查**
 
 Create `app/server/config.js` exporting:
 
@@ -232,7 +245,7 @@ npm test -- --test-name-pattern="database"
 
 Expected: PASS.
 
-- [ ] **Step 4: 先写迁移测试**
+- [x] **Step 4: 先写迁移测试**
 
 Create `app/tests/integration/migrations.test.js` with assertions for:
 
@@ -271,7 +284,7 @@ npm run test:integration
 
 Expected: FAIL because migration files and runner do not exist.
 
-- [ ] **Step 5: 实现 SQLite 连接和 001 迁移**
+- [x] **Step 5: 实现 SQLite 连接和 001 迁移**
 
 `app/server/db/connection.js` must set:
 
@@ -306,7 +319,7 @@ npm run test:integration
 
 Expected: migration tests PASS.
 
-- [ ] **Step 6: 先写 HTTP、错误协议和鉴权测试**
+- [x] **Step 6: 先写 HTTP、错误协议和鉴权测试**
 
 `health-api.test.js` must assert:
 
@@ -336,7 +349,7 @@ npm run test:integration
 
 Expected: FAIL because HTTP modules do not exist.
 
-- [ ] **Step 7: 实现 HTTP 基础层**
+- [x] **Step 7: 实现 HTTP 基础层**
 
 Implement these exact exports:
 
@@ -359,6 +372,8 @@ export function createRouter() {}
 
 `GET /api/v1/health` and `GET /api/v1/meta` return only non-sensitive values. The server must not set `Access-Control-Allow-Origin: *`.
 
+In the same TDD batch, prove and implement reusable `idempotency_keys`, `audit_log`, `assertVersion`, local secret generation/rotation, request-size enforcement, path-traversal rejection and API-safe Service Worker behavior. Tests must assert real database rows and HTTP responses; no committed token fixture is allowed.
+
 Run:
 
 ```bash
@@ -368,7 +383,7 @@ node server/index.js
 
 Expected: tests PASS and startup log names the root `data/workbench.sqlite`.
 
-- [ ] **Step 8: 先写备份测试**
+- [x] **Step 8: 先写备份测试**
 
 `backup-service.test.js` must:
 
@@ -394,7 +409,7 @@ npm run test:integration
 
 Expected: FAIL before the service exists.
 
-- [ ] **Step 9: 实现一致性备份骨架**
+- [x] **Step 9: 实现一致性备份骨架**
 
 Use SQLite backup or `VACUUM INTO` to write `data/backups/<timestamp>-<reason>.sqlite`. Write a neighboring JSON manifest containing:
 
@@ -418,7 +433,7 @@ npm run test:integration
 
 Expected: all PHASE 1 tests PASS.
 
-- [ ] **Step 10: 更新 API 契约和运行说明**
+- [x] **Step 10: 更新 API 契约和运行说明**
 
 Document `/api/v1/health`, `/api/v1/meta`, success/error envelopes, bearer authentication, Origin rules, body limits and data directory in:
 
@@ -433,11 +448,11 @@ rg -n "/api/v1/health|VERSION_CONFLICT|Idempotency-Key|WORKBENCH_DATA_DIR" app/s
 
 Expected: every term is present.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add app/package.json app/server app/tests app/server.js app/README.md scripts/health-check.mjs
-git commit -m "feat: establish local sqlite api foundation"
+git commit -m "feat: build local data and api foundation"
 ```
 
 ### PHASE 1 验收

@@ -1,0 +1,129 @@
+openapi: 3.1.0
+info:
+  title: Xiaoshang New Media Workbench Local API
+  version: 0.1.0
+  description: PHASE 1 local-only API foundation. SQLite is the only business source of truth.
+servers:
+  - url: http://127.0.0.1:5173/api/v1
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Check process, database, schema, and Git revision health
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+  /meta:
+    get:
+      operationId: getMeta
+      summary: Read non-sensitive application and schema metadata
+      responses:
+        "200":
+          description: Metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+  /workbuddy/token/rotate:
+    post:
+      operationId: rotateWorkbuddyToken
+      summary: Rotate the local WorkBuddy bearer token without returning it
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: Token rotated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: local-token
+      description: Token stored only in project-root data/secrets.json.
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        maxLength: 200
+      description: Repeating the same key and request replays the first response.
+    Version:
+      name: version
+      in: query
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: Stale versions return 409 VERSION_CONFLICT.
+  schemas:
+    SuccessEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: {}
+        meta:
+          type: object
+          required: [requestId]
+          properties:
+            requestId:
+              type: string
+              format: uuid
+    ErrorEnvelope:
+      type: object
+      required: [error, requestId]
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+        requestId:
+          type: string
+          format: uuid
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    OriginForbidden:
+      description: Browser write Origin is not same-origin
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    PayloadTooLarge:
+      description: JSON body exceeds WORKBENCH_BODY_LIMIT_BYTES (2 MB by default)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
