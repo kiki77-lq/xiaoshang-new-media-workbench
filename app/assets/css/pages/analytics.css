@@ -1,0 +1,5 @@
+.ranking-panel .empty-state { min-height: 272px; }
+.review-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.review-card { min-height: 142px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: #080e12; }
+.review-card p { margin-bottom: 20px; font-size: 12px; }
+.review-card strong { color: var(--accent); font-size: 22px; }

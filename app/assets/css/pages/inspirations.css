@@ -1,0 +1,6 @@
+.filter-panel { margin-bottom: 18px; display: flex; justify-content: space-between; gap: 16px; }
+.inspiration-list { min-height: 360px; }
+.empty-card-preview { margin-bottom: 16px; padding: 18px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; border: 1px solid var(--border); border-radius: 13px; background: #080e12; }
+.empty-card-preview .pin { grid-column: 1 / -1; width: fit-content; color: var(--warning); font-size: 11px; }
+.idea-icon { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 13px; color: var(--accent); background: var(--accent-soft); font-size: 23px; }
+.empty-card-preview p { margin: 5px 0 0; }

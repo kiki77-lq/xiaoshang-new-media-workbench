@@ -1,0 +1,24 @@
+.setting-card { min-width: 0; min-height: 268px; padding: 22px; }
+.setting-title { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
+.setting-title > span { width: 34px; height: 34px; display: grid; place-items: center; color: var(--accent); font-size: 22px; }
+.setting-title h2 { margin-bottom: 3px; }
+.setting-title p { margin: 0; font-size: 12px; }
+.connection-status { margin: 8px 0 20px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 9px; color: var(--muted); background: #080e12; }
+.connection-status i { width: 9px; height: 9px; border-radius: 50%; background: var(--warning); }
+.connection-status.is-online { color: var(--success); border-color: rgba(36, 214, 154, .25); }
+.connection-status.is-online i { background: var(--success); box-shadow: 0 0 12px rgba(36, 214, 154, .42); }
+.setting-card dl { margin: 0 0 18px; display: grid; gap: 8px; }
+.setting-card dl > div { display: flex; justify-content: space-between; gap: 20px; }
+.setting-card dt { color: var(--muted); }
+.setting-card dd { margin: 0; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.setting-copy { min-height: 48px; }
+.setting-actions { display: flex; gap: 10px; }
+.config-list { border: 1px solid var(--border); border-radius: 11px; overflow: hidden; }
+.config-list > div { min-height: 44px; padding: 0 12px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; border-bottom: 1px solid var(--border-soft); }
+.config-list > div:last-child { border-bottom: 0; }
+.keyword-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.keyword-list span, .keyword-list button { min-height: 40px; padding: 0 13px; display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; background: #080e12; }
+.keyword-list button { color: var(--muted); border-style: dashed; }
+.version-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.version-grid > div { padding: 12px; display: grid !important; border: 1px solid var(--border); border-radius: 10px; background: #080e12; }
+.version-grid dd { max-width: 100%; color: var(--text); }

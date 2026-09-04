@@ -41,3 +41,14 @@ test("service worker always sends API GET requests directly to the network", asy
   assert.equal(networkReads, 1);
   assert.equal(cacheReads, 0);
 });
+
+test("service worker precache never contains an API URL", () => {
+  const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+  const source = fs.readFileSync(path.join(appDir, "sw.js"), "utf8");
+  const assetsMatch = source.match(/const ASSETS = \[([\s\S]*?)\];/);
+
+  assert.ok(assetsMatch, "static asset list must exist");
+  assert.doesNotMatch(assetsMatch[1], /\/api\//);
+  assert.match(source, /url\.pathname\.startsWith\("\/api\/"\)/);
+  assert.match(source, /fetch\(e\.request\)/);
+});

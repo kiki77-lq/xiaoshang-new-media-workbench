@@ -1,0 +1,21 @@
+export function escapeHtml(value = "") {
+  return String(value).replace(/[&<>'"]/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
+  }[character]));
+}
+
+export function pageHeader(title, subtitle, actions = "") {
+  return `<header class="page-header"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="page-actions">${actions}</div></header>`;
+}
+
+export function statCard(label, tone = "accent", icon = "◇", note = "等待业务数据") {
+  return `<article class="stat-card"><span class="stat-icon tone-${tone}">${icon}</span><div><span class="stat-label">${label}</span><strong>—</strong><small>${note}</small></div></article>`;
+}
+
+export function emptyState(title, description, icon = "◇") {
+  return `<div class="empty-state"><span class="empty-icon">${icon}</span><strong>${title}</strong><p>${description}</p></div>`;
+}
+
+export function disabledButton(label, className = "btn-secondary") {
+  return `<button class="btn ${className}" type="button" disabled title="将在后续阶段开放">${label}<span class="future-tag">后续开放</span></button>`;
+}

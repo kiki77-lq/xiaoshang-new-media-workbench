@@ -60,12 +60,16 @@ function serveStatic(req, res, config, pathname) {
     throw new HttpError(400, "INVALID_PATH", "Request path contains an invalid character.");
   }
 
-  const relativePath = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
-  const target = path.resolve(config.appDir, relativePath);
+  const requestedPath = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
+  const requestedTarget = path.resolve(config.appDir, requestedPath);
   const appPrefix = `${path.resolve(config.appDir)}${path.sep}`;
-  if (target !== path.resolve(config.appDir) && !target.startsWith(appPrefix)) {
+  if (requestedTarget !== path.resolve(config.appDir) && !requestedTarget.startsWith(appPrefix)) {
     throw new HttpError(403, "PATH_FORBIDDEN", "Requested path is outside the application directory.");
   }
+  const isNavigationRoute = !path.extname(requestedPath);
+  const target = !fs.existsSync(requestedTarget) && isNavigationRoute
+    ? path.resolve(config.appDir, "index.html")
+    : requestedTarget;
   if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
     throw new HttpError(404, "NOT_FOUND", "File not found.");
   }

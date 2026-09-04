@@ -1,0 +1,4 @@
+.platform-section { min-width: 0; }
+.radar-panel { min-height: 100%; }
+.radar-panel .empty-state { min-height: 478px; }
+.page-home .platform-card { min-height: 132px; }

@@ -22,5 +22,8 @@ node_modules/
 dist/
 build/
 coverage/
+/artifacts/
+/app/test-results/
+/app/playwright-report/
 *.log
 .DS_Store
