@@ -3,3 +3,9 @@
 .observation-preview p { margin: 14px 0; }
 .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .page-observations .content-section > .empty-state { min-height: 238px; }
+.observation-preview { min-width:0; }
+.observation-preview > div { min-width:0; overflow-wrap:anywhere; }
+.observation-preview .inline-actions { margin-top:14px; }
+.radar-summary-item { padding:14px 0; border-bottom:1px solid var(--border); }
+.radar-summary-item a { color:var(--text); }
+@media(max-width:760px) { .observation-preview { grid-template-columns:1fr; padding:14px; } .observation-preview .inline-actions .btn { flex:1; } }

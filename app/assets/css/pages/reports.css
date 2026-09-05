@@ -1,2 +1,14 @@
 .report-card { min-height: 270px; padding: 20px; }
 .report-card .empty-state { min-height: 182px; }
+.report-controls { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+.report-controls .form-field { flex:1; min-width:180px; }
+.report-provenance { display:flex; flex-wrap:wrap; gap:10px 20px; padding:14px 0 20px; font-size:12px; color:var(--muted); }
+.report-provenance strong { color:var(--text); font-size:16px; }
+.report-list { padding-left:18px; line-height:1.9; overflow-wrap:anywhere; }
+.report-list li { margin:8px 0; }
+.report-card { min-height:200px; }
+.report-markdown pre { white-space:pre-wrap; overflow-wrap:anywhere; border:1px solid var(--border); background:var(--panel); padding:16px; border-radius:12px; }
+[data-report-save] .report-grid,[data-report-save] .stats-grid { grid-template-columns:1fr; }
+[data-report-save] .report-card { min-height:0; }
+[data-report-save] .report-markdown { display:none; }
+@media(max-width:760px) { .report-controls { display:block; } .report-controls .form-field { margin:14px 0 0; min-width:0; } }

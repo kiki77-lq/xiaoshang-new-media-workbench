@@ -1,11 +1,832 @@
 openapi: 3.1.0
 info:
   title: Xiaoshang New Media Workbench Local API
-  version: 0.5.0
-  description: PHASE 5 local API. SQLite is the sole business source. Timestamps use UTC ISO8601; metric periods are inclusive Shanghai calendar dates. No business fixtures are created at startup.
+  version: 0.6.0
+  description: PHASE 6 local API. SQLite is the sole business source. Timestamps use UTC ISO8601; metric periods are inclusive Shanghai calendar dates. No business fixtures are created at startup. All API calls with an explicit invalid Bearer token are rejected. New calls during restore receive 503.
 servers:
   - url: http://127.0.0.1:5173/api/v1
 paths:
+  /reports:
+    get:
+      operationId: listReports
+      description: 保存后的完整快照；不会动态关联后来数据。
+      parameters:
+        - name: periodType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - week
+              - month
+      responses:
+        "200":
+          description: 保存后的完整快照；不会动态关联后来数据。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReportList"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      operationId: createReport
+      description: 确定性周/月报告；同键重放同 ID，不同键同周期保存独立不可变快照。未调用 AI。
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: 确定性周/月报告；同键重放同 ID，不同键同周期保存独立不可变快照。未调用 AI。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Report"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportInput"
+  /reports/preview:
+    get:
+      operationId: previewReport
+      description: 不保存预览。上海时间，周一至周日或自然月；已发布内容按实际 published_at 去重。指标采用安全周期汇总，排除跨边界、重叠与推断值，未知保留 null。
+      parameters:
+        - name: periodType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - week
+              - month
+        - name: anchorDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: 不保存预览。上海时间，周一至周日或自然月；已发布内容按实际 published_at 去重。指标采用安全周期汇总，排除跨边界、重叠与推断值，未知保留 null。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Report"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /reports/{id}:
+    get:
+      operationId: getReport
+      description: 按 ID 返回不可变快照。
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: 按 ID 返回不可变快照。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Report"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /reports/{id}/markdown:
+    get:
+      operationId: exportReportMarkdown
+      description: JSON envelope 包含保存时的 Markdown 与下载文件名。
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: JSON envelope 包含保存时的 Markdown 与下载文件名。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReportMarkdown"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /observations:
+    get:
+      operationId: listObservations
+      description: 人工/WorkBuddy 来源，无爬虫。stats 为全部观察的上海日期统计，highHeat>=70；search 匹配标题/摘要/竞品/理由/品牌/车型。
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - hotspot
+              - competitor
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - pending
+              - converted
+              - ignored
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 人工/WorkBuddy 来源，无爬虫。stats 为全部观察的上海日期统计，highHeat>=70；search 匹配标题/摘要/竞品/理由/品牌/车型。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ObservationList"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      operationId: createObservation
+      description: 新增待处理观察，来源文案不标作 AI。
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: 新增待处理观察，来源文案不标作 AI。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Observation"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ObservationInput"
+  /observations/{id}:
+    get:
+      operationId: getObservation
+      description: 读取观察及不可移除的转换历史。
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: 读取观察及不可移除的转换历史。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Observation"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      operationId: updateObservation
+      description: 可编辑 kind，乐观锁；禁止伪造 converted 状态或移除已转换历史。
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: 可编辑 kind，乐观锁；禁止伪造 converted 状态或移除已转换历史。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Observation"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ObservationPatch"
+  /observations/{id}/convert:
+    post:
+      operationId: convertObservation
+      description: 同步事务原子保存灵感、原始来源/标签、转换与审计。已转换优先返回既有灵感；ignored 必须先改回 pending。
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: 不同键重试已转换的观察，返回 alreadyConverted=true。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ObservationConversion"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "201":
+          description: 同步事务原子保存灵感、原始来源/标签、转换与审计。已转换优先返回既有灵感；ignored 必须先改回 pending。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ObservationConversion"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ObservationConvertInput"
+  /settings:
+    get:
+      operationId: getSettings
+      description: 仅非敏感配置。tokenConfigured 不代表 WorkBuddy 正在运行。有效 Bearer（含 GET）记录最近请求，显式错误 Bearer 返回 401。版本信息通过 /meta 获取。
+      parameters: []
+      responses:
+        "200":
+          description: 仅非敏感配置。tokenConfigured 不代表 WorkBuddy 正在运行。有效 Bearer（含 GET）记录最近请求，显式错误 Bearer 返回 401。版本信息通过 /meta 获取。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Settings"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      operationId: updateSettings
+      description: 白名单字段、整体设置版本与平台版本原子校验；拒绝 password/token/credentials 及未知字段。
+      parameters: []
+      responses:
+        "200":
+          description: 白名单字段、整体设置版本与平台版本原子校验；拒绝 password/token/credentials 及未知字段。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Settings"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsInput"
+  /backups:
+    get:
+      operationId: listBackups
+      description: 仅本地受管清单；校验失败显示 verified=false，非法清单忽略并返回 warnings，不暴露文件路径。保守保留全部备份，不自动删除手工或自动备份。
+      parameters: []
+      responses:
+        "200":
+          description: 仅本地受管清单；校验失败显示 verified=false，非法清单忽略并返回 warnings，不暴露文件路径。保守保留全部备份，不自动删除手工或自动备份。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BackupList"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      operationId: createBackup
+      description: 原生 SQLite 在线一致性备份；异步幂等使用数据库外部持久操作日志。
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: 原生 SQLite 在线一致性备份；异步幂等使用数据库外部持久操作日志。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Backup"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmptyInput"
+  /backups/{id}/verify:
+    post:
+      operationId: verifyBackup
+      description: 校验哈希、临时副本完整性、已知 schema 与必要表；兼容旧库仅迁移临时副本。发放绑定 ID+SHA256 的单次五分钟进程内确认票据。
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: 校验哈希、临时副本完整性、已知 schema 与必要表；兼容旧库仅迁移临时副本。发放绑定 ID+SHA256 的单次五分钟进程内确认票据。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BackupVerification"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmptyInput"
+  /backups/{id}/restore:
+    post:
+      operationId: restoreBackup
+      description: 显式第二次确认。票据一次性使用；再次验哈希、拒绝新请求并排空在途异步工作，校验暂存副本，创建并验证保护备份后原子替换。全部路由重新绑定原生
+        DB；健康/审计失败回滚并重新打开旧数据库。异步操作日志在数据库外，不跨替换持有 SQLite 事务。相同键可重放成功结果；进程中断的 pending 日志返回 OPERATION_UNCERTAIN。
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: 显式第二次确认。票据一次性使用；再次验哈希、拒绝新请求并排空在途异步工作，校验暂存副本，创建并验证保护备份后原子替换。全部路由重新绑定原生
+            DB；健康/审计失败回滚并重新打开旧数据库。异步操作日志在数据库外，不跨替换持有 SQLite 事务。相同键可重放成功结果；进程中断的 pending 日志返回
+            OPERATION_UNCERTAIN。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RestoreResult"
+                  meta:
+                    type: object
+                    additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, OBSERVATION_NOT_PENDING, OBSERVATION_ALREADY_CONVERTED,
+            RESTORE_CONFIRMATION_INVALID or OPERATION_UNCERTAIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: "RESTORE_FAILED: recovery failed; previous data was protected by rollback where possible. Inspect
+            /health before retrying."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAINTENANCE or REQUEST_DRAIN_TIMEOUT. Retry after active recovery completes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestoreInput"
   /ingestion:
     get:
       operationId: listIngestionRuns
@@ -607,6 +1428,743 @@ components:
         maxLength: 200
       description: Repeating the same key and request replays the first response.
   schemas:
+    ReportInput:
+      type: object
+      additionalProperties: false
+      required:
+        - periodType
+      properties:
+        periodType:
+          type: string
+          enum:
+            - week
+            - month
+        anchorDate:
+          type: string
+          format: date
+        generationMode:
+          type: string
+          enum:
+            - deterministic
+          default: deterministic
+    ReportSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - newInspirations
+        - newContents
+        - publishedContents
+        - views
+        - topContents
+        - platforms
+        - observations
+        - insights
+        - recommendations
+        - dataGaps
+      properties:
+        newInspirations:
+          type: integer
+        newContents:
+          type: integer
+        publishedContents:
+          type: integer
+        views:
+          type:
+            - number
+            - "null"
+        topContents:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - contentId
+              - title
+              - views
+            properties:
+              contentId:
+                type: string
+              title:
+                type: string
+              views:
+                type: number
+        platforms:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - code
+              - name
+              - views
+              - netFollowers
+            properties:
+              code:
+                type: string
+              name:
+                type: string
+              views:
+                type:
+                  - number
+                  - "null"
+              netFollowers:
+                type:
+                  - number
+                  - "null"
+        observations:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - title
+              - kind
+              - status
+            properties:
+              id:
+                type: string
+              title:
+                type: string
+              kind:
+                type: string
+              status:
+                type: string
+        insights:
+          type: array
+          items:
+            type: string
+        recommendations:
+          type: array
+          items:
+            type: string
+        dataGaps:
+          type: array
+          items:
+            type: string
+    Report:
+      type: object
+      additionalProperties: false
+      required:
+        - periodType
+        - periodStart
+        - periodEnd
+        - generatedBy
+        - generatedAt
+        - dataUpdatedAt
+        - summary
+        - markdown
+      properties:
+        id:
+          type: string
+        periodType:
+          type: string
+          enum:
+            - week
+            - month
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        generatedBy:
+          const: deterministic
+        generatedAt:
+          type: string
+          format: date-time
+        dataUpdatedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        summary:
+          $ref: "#/components/schemas/ReportSummary"
+        markdown:
+          type: string
+    ObservationInput:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - title
+        - sourceUrl
+        - sourcePlatform
+        - worthReason
+      properties:
+        kind:
+          type: string
+          enum:
+            - hotspot
+            - competitor
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        summary:
+          type:
+            - string
+            - "null"
+        competitorName:
+          type:
+            - string
+            - "null"
+        brand:
+          type:
+            - string
+            - "null"
+        vehicleModel:
+          type:
+            - string
+            - "null"
+        sourceUrl:
+          type: string
+          format: uri
+          pattern: ^https?://
+        sourcePlatform:
+          type: string
+          minLength: 1
+        sourceType:
+          type: string
+          enum:
+            - manual
+            - workbuddy
+          default: manual
+        discoveredAt:
+          type: string
+          format: date-time
+        heatScore:
+          type:
+            - number
+            - "null"
+          minimum: 0
+          maximum: 100
+          description: 人工 0–100 评分，不代表平台热度指标。
+        heatDelta:
+          type:
+            - number
+            - "null"
+        worthReason:
+          type: string
+          minLength: 1
+        tags:
+          type: array
+          items:
+            type: string
+    ObservationPatch:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+      properties:
+        kind:
+          type: string
+          enum:
+            - hotspot
+            - competitor
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        summary:
+          type:
+            - string
+            - "null"
+        competitorName:
+          type:
+            - string
+            - "null"
+        brand:
+          type:
+            - string
+            - "null"
+        vehicleModel:
+          type:
+            - string
+            - "null"
+        sourceUrl:
+          type: string
+          format: uri
+          pattern: ^https?://
+        sourcePlatform:
+          type: string
+          minLength: 1
+        sourceType:
+          type: string
+          enum:
+            - manual
+            - workbuddy
+          default: manual
+        discoveredAt:
+          type: string
+          format: date-time
+        heatScore:
+          type:
+            - number
+            - "null"
+          minimum: 0
+          maximum: 100
+          description: 人工 0–100 评分，不代表平台热度指标。
+        heatDelta:
+          type:
+            - number
+            - "null"
+        worthReason:
+          type: string
+          minLength: 1
+        tags:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum:
+            - pending
+            - ignored
+        version:
+          type: integer
+          minimum: 1
+    ObservationConvertInput:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        summaryTitle:
+          type: string
+          minLength: 1
+          maxLength: 200
+    Observation:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - title
+        - summary
+        - competitorName
+        - brand
+        - vehicleModel
+        - sourceUrl
+        - sourcePlatform
+        - sourceType
+        - discoveredAt
+        - heatScore
+        - heatDelta
+        - worthReason
+        - tags
+        - status
+        - convertedInspirationId
+        - convertedAt
+        - createdAt
+        - updatedAt
+        - version
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum:
+            - hotspot
+            - competitor
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        summary:
+          type:
+            - string
+            - "null"
+        competitorName:
+          type:
+            - string
+            - "null"
+        brand:
+          type:
+            - string
+            - "null"
+        vehicleModel:
+          type:
+            - string
+            - "null"
+        sourceUrl:
+          type: string
+          format: uri
+          pattern: ^https?://
+        sourcePlatform:
+          type: string
+          minLength: 1
+        sourceType:
+          type: string
+          enum:
+            - manual
+            - workbuddy
+          default: manual
+        discoveredAt:
+          type: string
+          format: date-time
+        heatScore:
+          type:
+            - number
+            - "null"
+          minimum: 0
+          maximum: 100
+          description: 人工 0–100 评分，不代表平台热度指标。
+        heatDelta:
+          type:
+            - number
+            - "null"
+        worthReason:
+          type: string
+          minLength: 1
+        tags:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum:
+            - pending
+            - converted
+            - ignored
+        convertedInspirationId:
+          type:
+            - string
+            - "null"
+        convertedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    ObservationList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - stats
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Observation"
+        stats:
+          type: object
+          additionalProperties: false
+          required:
+            - todayHotspots
+            - highHeat
+            - pending
+            - weekConverted
+          properties:
+            todayHotspots:
+              type: integer
+            highHeat:
+              type: integer
+            pending:
+              type: integer
+            weekConverted:
+              type: integer
+    ObservationConversion:
+      type: object
+      additionalProperties: false
+      required:
+        - observation
+        - inspiration
+        - alreadyConverted
+      properties:
+        observation:
+          $ref: "#/components/schemas/Observation"
+        inspiration:
+          $ref: "#/components/schemas/Inspiration"
+        alreadyConverted:
+          type: boolean
+    Settings:
+      type: object
+      additionalProperties: false
+      required:
+        - workbuddy
+        - platforms
+        - keywords
+        - version
+        - updatedAt
+      properties:
+        workbuddy:
+          type: object
+          additionalProperties: false
+          required:
+            - tokenConfigured
+            - lastRequestAt
+          properties:
+            tokenConfigured:
+              type: boolean
+            lastRequestAt:
+              type:
+                - string
+                - "null"
+              format: date-time
+        platforms:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - code
+              - name
+              - handle
+              - profileUrl
+              - enabled
+              - lastMetricAt
+              - version
+            properties:
+              code:
+                type: string
+              name:
+                type: string
+              handle:
+                type:
+                  - string
+                  - "null"
+              profileUrl:
+                type:
+                  - string
+                  - "null"
+              enabled:
+                type: boolean
+              lastMetricAt:
+                type:
+                  - string
+                  - "null"
+                format: date-time
+              version:
+                type: integer
+                minimum: 1
+        keywords:
+          type: array
+          items:
+            type: string
+        version:
+          type: integer
+          minimum: 1
+        updatedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    SettingsInput:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        keywords:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+          maxItems: 100
+        platforms:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - code
+              - version
+            properties:
+              code:
+                type: string
+                enum:
+                  - douyin
+                  - wechat_channels
+                  - xiaohongshu
+                  - weibo
+              handle:
+                type:
+                  - string
+                  - "null"
+              profileUrl:
+                type:
+                  - string
+                  - "null"
+                format: uri
+              enabled:
+                type: boolean
+              version:
+                type: integer
+                minimum: 1
+          maxItems: 4
+    Backup:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - createdAt
+        - appVersion
+        - schemaVersion
+        - sizeBytes
+        - sha256
+        - integrity
+        - verified
+        - restorable
+        - reason
+      properties:
+        id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9-]{1,180}$
+        createdAt:
+          type: string
+          format: date-time
+        appVersion:
+          type: string
+        schemaVersion:
+          type: integer
+        sizeBytes:
+          type: integer
+          minimum: 0
+        sha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        integrity:
+          type: string
+        verified:
+          type: boolean
+        restorable:
+          type: boolean
+        reason:
+          type: string
+    BackupList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - warnings
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Backup"
+        warnings:
+          type: array
+          items:
+            type: string
+    BackupVerification:
+      type: object
+      additionalProperties: false
+      required:
+        - backup
+        - verification
+        - confirmationToken
+        - expiresAt
+      properties:
+        backup:
+          $ref: "#/components/schemas/Backup"
+        verification:
+          type: object
+          additionalProperties: false
+          required:
+            - ok
+            - hashMatches
+            - integrity
+            - schemaVersion
+          properties:
+            ok:
+              type: boolean
+            hashMatches:
+              type: boolean
+            integrity:
+              type: string
+            schemaVersion:
+              type:
+                - integer
+                - "null"
+        confirmationToken:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    RestoreInput:
+      type: object
+      additionalProperties: false
+      required:
+        - confirmationToken
+        - confirmText
+      properties:
+        confirmationToken:
+          type: string
+          minLength: 1
+        confirmText:
+          const: 恢复
+    RestoreResult:
+      type: object
+      additionalProperties: false
+      required:
+        - restored
+        - backupId
+        - preRestoreBackup
+        - health
+      properties:
+        restored:
+          const: true
+        backupId:
+          type: string
+        preRestoreBackup:
+          $ref: "#/components/schemas/Backup"
+        health:
+          type: object
+          additionalProperties: false
+          required:
+            - status
+            - database
+            - schemaVersion
+          properties:
+            status:
+              const: ok
+            database:
+              const: ok
+            schemaVersion:
+              type: integer
+    EmptyInput:
+      type: object
+      additionalProperties: false
+      required: []
+      properties: {}
+    ReportList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Report"
+    ReportMarkdown:
+      type: object
+      additionalProperties: false
+      required:
+        - markdown
+        - fileName
+      properties:
+        markdown:
+          type: string
+        fileName:
+          type: string
     MetricEvidenceInput:
       type: object
       additionalProperties: false
@@ -2558,7 +4116,7 @@ components:
             $ref: "#/components/schemas/Content"
         hotspotSummary:
           type: array
-          description: Empty until the hotspot phase is implemented.
+          description: Up to five actual pending observations ordered by manual heat score and discovery time.
   responses:
     SchedulingValidationError:
       description: 'VALIDATION_ERROR, VERSION_REQUIRED, REASON_REQUIRED, PUBLICATION_REQUIRED or IDEMPOTENCY_KEY_REQUIRED. Body fields, enums, positive integer versions, URLs, timestamps and endsAt are validated.'

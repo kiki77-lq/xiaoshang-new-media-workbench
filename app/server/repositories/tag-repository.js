@@ -42,6 +42,10 @@ export function replaceContentTags(db, contentId, tags, now) {
   replaceTags(db, "content_tags", "content_id", contentId, tags, now);
 }
 
+export function replaceObservationTags(db, id, tags, now) {
+  replaceTags(db, 'observation_tags', 'observation_id', id, tags, now);
+}
+
 export function listInspirationTags(db, inspirationId) {
   return db.prepare(`SELECT t.name FROM tags t JOIN inspiration_tags it ON it.tag_id = t.id WHERE it.inspiration_id = ? ORDER BY t.created_at, t.name`)
     .all(inspirationId).map(({ name }) => name);

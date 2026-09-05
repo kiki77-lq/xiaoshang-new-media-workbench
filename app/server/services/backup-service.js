@@ -5,6 +5,7 @@ import { backup, DatabaseSync } from "node:sqlite";
 
 import { openDatabase } from "../db/connection.js";
 import { getSchemaVersion } from "../db/migrate.js";
+import { copyVerified, validateCompatible } from './backup-catalog.js';
 
 function sha256(filePath) {
   return createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
@@ -57,6 +58,7 @@ export async function createBackup({ db, dataDir, reason, appVersion }) {
   const safeReason = normalizeReason(reason);
   const backupsDir = path.join(dataDir, "backups");
   fs.mkdirSync(backupsDir, { recursive: true, mode: 0o700 });
+  if (fs.lstatSync(backupsDir).isSymbolicLink()) throw new Error('BACKUP_DIRECTORY_UNSAFE');
   fs.chmodSync(backupsDir, 0o700);
 
   db.exec("PRAGMA wal_checkpoint(FULL)");
@@ -79,6 +81,8 @@ export async function createBackup({ db, dataDir, reason, appVersion }) {
     sha256: sha256(sqlitePath),
     createdAt,
     sqliteFile
+    ,sizeBytes: fs.statSync(sqlitePath).size,
+    integrity: inspected.integrity
   };
   writeJsonAtomic(manifestPath, stored);
   return manifestWithPaths(stored, backupsDir, manifestPath);
@@ -119,14 +123,12 @@ export async function verifyBackup(input) {
   }
 }
 
-function moveIfExists(source, destination) {
-  if (fs.existsSync(source)) fs.renameSync(source, destination);
-}
-
-function moveDatabaseFamily(sourceBase, destinationBase) {
-  moveIfExists(sourceBase, destinationBase);
-  moveIfExists(`${sourceBase}-wal`, `${destinationBase}-wal`);
-  moveIfExists(`${sourceBase}-shm`, `${destinationBase}-shm`);
+function moveDatabaseFamily(sourceBase, destinationBase, moved = []) {
+  for (const suffix of ['', '-wal', '-shm']) {
+    const source = `${sourceBase}${suffix}`, destination = `${destinationBase}${suffix}`;
+    if (fs.existsSync(source)) { fs.renameSync(source,destination); moved.push([source,destination]); }
+  }
+  return moved;
 }
 
 export async function restoreBackup({
@@ -135,41 +137,36 @@ export async function restoreBackup({
   dataDir,
   manifest,
   appVersion,
-  validateRestored = () => {}
+  validateRestored = () => {},
+  onDatabase,
+  preRestoreManifest: suppliedPreRestore
 }) {
   const verification = await verifyBackup(manifest);
   if (!verification.ok) throw new Error("BACKUP_VERIFICATION_FAILED");
 
-  const preRestoreManifest = await createBackup({
-    db,
-    dataDir,
-    reason: "pre-restore",
-    appVersion
-  });
   const suffix = randomUUID();
   const stagingPath = `${dbPath}.restore-${suffix}.tmp`;
   const rollbackPath = path.join(dataDir, "backups", `${suffix}-restore-rollback.sqlite`);
   const failedPath = path.join(dataDir, "backups", `${suffix}-failed-restored.sqlite`);
 
-  fs.copyFileSync(manifest.sqlitePath, stagingPath);
-  fs.chmodSync(stagingPath, 0o600);
-  if (inspectSqlite(stagingPath).integrity !== "ok") {
-    throw new Error("STAGED_RESTORE_INTEGRITY_FAILED");
-  }
-
-  db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-  db.close();
-  let originalMoved = false;
+  let preRestoreManifest, closed = false;
+  const moved = [];
   let restoredDb;
   try {
-    moveDatabaseFamily(dbPath, rollbackPath);
-    originalMoved = true;
+    copyVerified(manifest,stagingPath);
+    const staged = new DatabaseSync(stagingPath);
+    try { validateCompatible(staged,{migrate:true}); } finally { staged.close(); }
+    preRestoreManifest = suppliedPreRestore || await createBackup({ db,dataDir,reason:'pre-restore',appVersion });
+    if (!(await verifyBackup(preRestoreManifest)).ok) throw new Error('PRE_RESTORE_BACKUP_INVALID');
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    db.close(); closed = true;
+    // Record every successful rename immediately, including partial family moves.
+    moveDatabaseFamily(dbPath, rollbackPath, moved);
     fs.renameSync(stagingPath, dbPath);
     restoredDb = openDatabase({ dbPath });
-    if (restoredDb.prepare("PRAGMA integrity_check").get().integrity_check !== "ok") {
-      throw new Error("RESTORED_DATABASE_INTEGRITY_FAILED");
-    }
-    validateRestored(restoredDb);
+    validateCompatible(restoredDb);
+    onDatabase?.(restoredDb);
+    await validateRestored(restoredDb,preRestoreManifest);
     return {
       ok: true,
       db: restoredDb,
@@ -181,18 +178,32 @@ export async function restoreBackup({
       restoredDb.close();
       restoredDb = null;
     }
-    if (originalMoved) {
-      moveDatabaseFamily(dbPath, failedPath);
-      moveDatabaseFamily(rollbackPath, dbPath);
+    try { if (closed) {
+      if (moved.some(([source]) => source === dbPath)) {
+        // Only quarantine a replacement after the complete original family was moved.
+        // An early family-move failure leaves untouched WAL/SHM files in place.
+        if (!fs.existsSync(stagingPath)) moveDatabaseFamily(dbPath, failedPath);
+        for (const [source,destination] of [...moved].reverse()) fs.renameSync(destination,source);
+      }
       const rollbackDb = openDatabase({ dbPath });
       try {
         if (rollbackDb.prepare("PRAGMA integrity_check").get().integrity_check !== "ok") {
           throw new Error("ROLLBACK_DATABASE_INTEGRITY_FAILED");
         }
-      } finally {
-        rollbackDb.close();
-      }
+        if (onDatabase) onDatabase(rollbackDb);
+        else rollbackDb.close();
+      } catch (rollbackError) { rollbackDb.close(); throw rollbackError; }
+    } } catch (rollbackError) {
+      const failure = new Error('RESTORE_ROLLBACK_FAILED', {cause:rollbackError});
+      failure.rollbackFailed = true;
+      throw failure;
     }
     throw new Error(`RESTORE_FAILED_ROLLED_BACK: ${error.message}`, { cause: error });
+  } finally {
+    for (const file of [stagingPath,`${stagingPath}-wal`,`${stagingPath}-shm`]) {
+      // Cleanup is best-effort: never replace the primary rollback failure,
+      // which tells the HTTP lifecycle to stay fail-closed. Retain undeletable artifacts.
+      try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch { /* manual disk repair */ }
+    }
   }
 }

@@ -11,7 +11,7 @@ test("health and meta expose only non-sensitive runtime facts", async (t) => {
   assert.equal(healthResponse.status, 200);
   assert.equal(health.data.status, "ok");
   assert.equal(health.data.database, "ok");
-  assert.equal(health.data.schemaVersion, 3);
+  assert.equal(health.data.schemaVersion, 4);
   assert.match(health.data.gitSha, /^[0-9a-f]{40}$/);
   assert.equal(typeof health.meta.requestId, "string");
 
@@ -20,7 +20,7 @@ test("health and meta expose only non-sensitive runtime facts", async (t) => {
   assert.equal(metaResponse.status, 200);
   assert.deepEqual(meta.data, {
     appVersion: "0.1.0",
-    schemaVersion: 3,
+    schemaVersion: 4,
     gitSha: "a".repeat(40),
     upstreamSha: "d8f8e5b2d10c193d0ea0bf3581e41cc34490e55b"
   });

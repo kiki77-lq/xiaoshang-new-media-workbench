@@ -36,7 +36,7 @@ export function renderHome({ data, loading = false, error = null } = {}) {
         <div class="section-heading compact"><h2>最新内容分发</h2><span class="data-state">${recentContents.length} 条内容</span></div>
         <div class="recent-content-list">${recent}</div>
       </section>
-      <aside class="content-section radar-panel"><div class="section-heading"><div><h2>热点雷达摘要</h2><p>关注值得判断的汽车话题</p></div></div>${radar.length ? radar.map((item) => `<article>${escapeHtml(item.title || "")}</article>`).join("") : emptyState("雷达暂时安静", "热点模块尚未进入实施阶段，当前真实结果为空。", "⌁")}</aside>
+      <aside class="content-section radar-panel"><div class="section-heading"><div><h2>热点雷达摘要</h2><p>关注值得判断的汽车话题</p></div></div>${radar.length ? radar.map((item) => `<article class="radar-summary-item"><a href="/observations" data-route>${escapeHtml(item.title || "")}</a></article>`).join("") : emptyState("雷达暂时安静", "目前没有待判断的热点，可在热点 / 竞品观察中手动记录。", "⌁")}</aside>
     </div>
   </section>`;
 }

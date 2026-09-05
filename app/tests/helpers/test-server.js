@@ -30,10 +30,9 @@ export async function startTestServer(t, overrides = {}) {
   const baseUrl = `http://${config.host}:${address.port}`;
   config.allowedOrigins = new Set([baseUrl]);
 
-  t.after(() => {
-    server.close();
-    db.close();
+  t.after(async () => {
+    await new Promise(resolve=>server.close(resolve));
   });
 
-  return { baseUrl, config, db, paths, server, token: secrets.token };
+  return { baseUrl, config, get db() { return server.database; }, paths, server, token: secrets.token };
 }

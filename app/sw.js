@@ -1,5 +1,5 @@
 /* 新媒体运营工作台 — Service Worker（离线缓存 App 外壳） */
-const CACHE = "xiaoshang-shell-v5";
+const CACHE = "xiaoshang-shell-v6";
 const ASSETS = [
   "/",
   "/index.html",
@@ -35,6 +35,8 @@ const ASSETS = [
   "/assets/js/pages/reports.js",
   "/assets/js/pages/observations.js",
   "/assets/js/pages/settings.js",
+  "/assets/js/pages/backup-ui.js",
+  "/assets/js/shared/download.js",
   "/assets/js/shared/dom.js",
   "/assets/js/shared/forms.js",
   "/assets/js/shared/format.js",

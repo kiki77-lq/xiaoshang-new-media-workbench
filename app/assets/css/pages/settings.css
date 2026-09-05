@@ -22,3 +22,15 @@
 .version-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .version-grid > div { padding: 12px; display: grid !important; border: 1px solid var(--border); border-radius: 10px; background: #080e12; }
 .version-grid dd { max-width: 100%; color: var(--text); }
+.backup-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.backup-item { border:1px solid var(--border); border-radius:12px; padding:16px; min-width:0; }
+.backup-item > div { display:flex; gap:10px; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; }
+.backup-item p { font-size:12px; }
+.backup-item code,.backup-checksum { overflow-wrap:anywhere; font-size:11px; }
+.backup-item .btn { margin-top:12px; }
+.config-list small { display:block; color:var(--muted); font-size:11px; }
+.config-list > div { padding:10px 12px; }
+[data-edit-keywords] { margin-top:16px; }
+.btn-danger { color:white; background:#9b2635; border:1px solid var(--danger); }
+[data-restore-form] .quality-warning { margin:0; }
+@media(max-width:760px) { .backup-list { grid-template-columns:1fr; } .setting-card dl>div { flex-wrap:wrap; gap:6px; } }

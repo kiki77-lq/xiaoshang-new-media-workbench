@@ -17,6 +17,6 @@ export function getDashboard({ db, now = new Date().toISOString() }) {
     platforms: db.prepare("SELECT code, display_name AS displayName, enabled FROM platform_channels ORDER BY CASE code WHEN 'douyin' THEN 1 WHEN 'wechat_channels' THEN 2 WHEN 'xiaohongshu' THEN 3 WHEN 'weibo' THEN 4 END")
       .all().map((row) => ({ ...row, enabled: Boolean(row.enabled) })),
     recentContents: listContents(db, { limit: 5 }),
-    hotspotSummary: []
+    hotspotSummary: db.prepare("SELECT id,title,kind,heat_score heatScore,worth_reason worthReason FROM observations WHERE status='pending' ORDER BY heat_score DESC,discovered_at DESC LIMIT 5").all()
   };
 }

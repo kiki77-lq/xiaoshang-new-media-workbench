@@ -78,11 +78,14 @@ function fullCoverage(rows, dates) {
   return cursor > dates.periodEnd;
 }
 export function getOverview(db, month) {
-  const dates = analyticsMonth(month), warnings = new Set();
+  return getPeriodOverview(db, analyticsMonth(month));
+}
+export function getPeriodOverview(db, dates) {
+  const warnings = new Set();
   const observed = latestSnapshots(db, dates);
   const inMonth = observed.filter(row => {
     if (row.period_start < dates.periodStart || row.period_end > dates.periodEnd) {
-      warning(warnings, '跨月观测已排除：无法将跨月累计值准确拆分到所选月份。');
+      warning(warnings, '跨月或跨报告周期观测已排除：无法将累计值准确拆分到所选周期。');
       return false;
     }
     return true;

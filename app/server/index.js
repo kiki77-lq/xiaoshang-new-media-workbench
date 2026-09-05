@@ -21,6 +21,10 @@ import { registerContentRoutes } from "./routes/contents.js";
 import { registerDashboardRoutes } from "./routes/dashboard.js";
 import { registerInspirationRoutes } from "./routes/inspirations.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.js";
+import { registerPhase6Routes } from './routes/phase6.js';
+import { recordWorkbuddyRequest } from './services/settings-service.js';
+import { registerBackupRoutes } from './routes/backups.js';
+import { createOperationJournal } from './services/operation-journal.js';
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -97,7 +101,7 @@ function serveStatic(req, res, config, pathname) {
   res.end(content);
 }
 
-function buildRouter(config, db) {
+function buildRouter(config, db, lifecycle) {
   const router = createRouter();
 
   registerInspirationRoutes(router, { config, db });
@@ -105,6 +109,8 @@ function buildRouter(config, db) {
   registerDashboardRoutes(router, { config, db });
   registerCalendarRoutes(router, { config, db });
   registerAnalyticsRoutes(router, { config, db });
+  registerPhase6Routes(router, { config, db });
+  registerBackupRoutes(router, { config, lifecycle });
 
   router.add("GET", "/api/v1/health", async (_req, res, context) => {
     sendData(res, 200, {
@@ -155,13 +161,41 @@ function buildRouter(config, db) {
 }
 
 export function createWorkbenchServer({ config, db }) {
-  const router = buildRouter(config, db);
-  return http.createServer(async (req, res) => {
+  let currentDb = db, router, maintaining = false, unavailable = false, drained;
+  const active = new Set();
+  const lifecycle = {
+    get db() { return currentDb; },
+    tickets: new Map(),
+    operation: createOperationJournal(config.dataDir),
+    releaseRequest(id) { active.delete(id); drained?.(); },
+    failClosed() { unavailable=true; },
+    rebind(next) { const nextRouter = buildRouter(config,next,lifecycle); currentDb=next; router=nextRouter; },
+    async maintenance(requestId,execute) {
+      if(maintaining||unavailable)throw new HttpError(503,'MAINTENANCE','数据库正在恢复或等待修复，请稍后重试。');
+      maintaining=true;
+      try {
+        if([...active].some(id=>id!==requestId)) await new Promise((resolve,reject)=>{
+          const timer=setTimeout(()=>{drained=null;reject(new HttpError(503,'REQUEST_DRAIN_TIMEOUT','在途请求尚未结束，恢复已取消，请重试。'));},30000);
+          drained=()=>{if([...active].every(id=>id===requestId)){clearTimeout(timer);drained=null;resolve();}};
+          drained();
+        });
+        return await execute();
+      } finally { maintaining=false; }
+    }
+  };
+  lifecycle.rebind(db);
+  const server = http.createServer(async (req, res) => {
     const requestId = randomUUID();
     try {
       assertAllowedHost(req, config);
       const pathname = decodeRequestPath(req);
       if (pathname.startsWith("/api/v1")) {
+        if(maintaining||unavailable)throw new HttpError(503,'MAINTENANCE','数据库正在恢复或等待修复，请稍后重试。');
+        active.add(requestId);
+        if (req.headers.authorization) {
+          authenticateRequest({headers:{authorization:req.headers.authorization}},config);
+          recordWorkbuddyRequest(currentDb);
+        }
         const handled = await router.dispatch(req, res, { pathname, requestId });
         if (!handled) throw new HttpError(404, "NOT_FOUND", "API route not found.");
         return;
@@ -170,8 +204,14 @@ export function createWorkbenchServer({ config, db }) {
     } catch (error) {
       if (!res.headersSent) sendError(res, error, requestId);
       else res.end();
+    } finally {
+      active.delete(requestId);
+      drained?.();
     }
   });
+  Object.defineProperty(server,'database',{get:()=>currentDb});
+  server.on('close',()=>{if(currentDb.isOpen)currentDb.close();});
+  return server;
 }
 
 export async function prepareWorkbench({
@@ -208,8 +248,7 @@ export async function startWorkbench(options = {}) {
     console.log(`Xiaoshang workbench listening on http://${config.host}:${config.port}`);
     console.log(`Database: ${config.dbPath}`);
   });
-  server.on("close", () => db.close());
-  return { config, db, server };
+  return { config, get db() { return server.database; }, server };
 }
 
 const isDirectRun = process.argv[1]

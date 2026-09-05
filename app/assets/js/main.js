@@ -7,6 +7,10 @@ import { getPage } from "./pages/index.js";
 import { attachInspirations, openCreateInspiration } from "./pages/inspirations.js";
 import { createRouter } from "./router.js";
 import { currentMonth } from './shared/metrics.js';
+import { shanghaiDate } from './shared/format.js';
+import { attachReports } from './pages/reports.js';
+import { attachObservations } from './pages/observations.js';
+import { attachSettings } from './pages/settings.js';
 
 const appRoot = document.querySelector("#app");
 const state = {
@@ -23,7 +27,9 @@ const state = {
     inspirations: { filter: "all", search: "" },
     contents: { status: "all", contentType: "all", search: "" },
     calendar: { eventType: 'all' },
-    analytics: { month: currentMonth() }
+    analytics: { month: currentMonth() },
+    reports: { periodType: 'week', anchorDate: shanghaiDate(), reportId: null },
+    observations: { status: 'all', search: '' }
   }
 };
 
@@ -50,6 +56,14 @@ function pageEndpoint(name) {
   if (name === "inspirations") return `/inspirations${queryForPage(name)}`;
   if (name === "contents") return `/contents${queryForPage(name)}`;
   if (name === 'analytics') return `/analytics/overview?month=${encodeURIComponent(state.filters.analytics.month)}`;
+  if (name === 'reports') return `/reports?periodType=${state.filters.reports.periodType}`;
+  if (name === 'settings') return '/settings';
+  if (name === 'observations') {
+    const query=new URLSearchParams();
+    if(state.filters.observations.status!=='all')query.set('status',state.filters.observations.status);
+    if(state.filters.observations.search)query.set('search',state.filters.observations.search);
+    return `/observations?${query}`;
+  }
   if (name === 'calendar') {
     const query = new URLSearchParams(calendarRange(state.calendarDate));
     if (state.filters.calendar.eventType !== 'all') query.set('eventType', state.filters.calendar.eventType);
@@ -60,6 +74,10 @@ function pageEndpoint(name) {
 
 function coreControls(name) {
   const reload = () => loadPage(state.activeRoute, { showLoading: false });
+  if (['reports','observations','settings'].includes(name)) return {
+    api, data:state.pageData[name], filters:state.filters[name], reload,
+    setFilters(filters) { state.filters[name]=filters; loadPage(state.activeRoute); }
+  };
   if (name === 'analytics') return {
     api, data: state.pageData.analytics, reload, month: state.filters.analytics.month,
     setMonth(month) { state.filters.analytics.month = month; loadPage(state.activeRoute); }
@@ -115,6 +133,9 @@ function renderPage(route) {
   if (route.name === "analytics") attachAnalytics(outlet, coreControls('analytics'));
   if (route.name === "inspirations") attachInspirations(outlet, coreControls("inspirations"));
   if (route.name === "contents") attachContents(outlet, coreControls("contents"));
+  if (route.name === 'reports') attachReports(outlet,coreControls('reports'));
+  if (route.name === 'observations') attachObservations(outlet,coreControls('observations'));
+  if (route.name === 'settings') attachSettings(outlet,coreControls('settings'));
 }
 
 async function loadPage(route, { showLoading = true } = {}) {
@@ -127,9 +148,16 @@ async function loadPage(route, { showLoading = true } = {}) {
     renderPage(route);
   }
   try {
-    const [result, contentResult] = await Promise.all([api.get(endpoint), ['calendar','analytics'].includes(route.name) ? api.get('/contents') : Promise.resolve(null)]);
+    const [result, contentResult, backupsResult, healthResult, metaResult] = await Promise.all([
+      api.get(endpoint), ['calendar','analytics'].includes(route.name) ? api.get('/contents') : null,
+      ...['/backups','/health','/meta'].map(path=>route.name==='settings'?api.get(path):null)
+    ]);
     if (sequence !== state.requestSequence || state.activeRoute?.name !== route.name) return;
     state.pageData[route.name] = contentResult ? { ...result.data, contents: contentResult.data.items } : result.data;
+    if(backupsResult)state.pageData.settings={...result.data,backups:backupsResult.data.items,backupWarnings:backupsResult.data.warnings || []};
+    if(healthResult)state.health={...healthResult.data,requestId:healthResult.requestId};
+    if(metaResult)state.meta={...metaResult.data,requestId:metaResult.requestId};
+    if(healthResult && metaResult)state.apiError=null;
     state.pageErrors[route.name] = null;
   } catch (error) {
     if (sequence !== state.requestSequence || state.activeRoute?.name !== route.name) return;
