@@ -3,6 +3,7 @@ import { readJson } from "../http/body.js";
 import { HttpError } from "../http/errors.js";
 import { sendData } from "../http/response.js";
 import { getContent, listContents } from "../repositories/content-repository.js";
+import { updatePublication } from '../services/publication-service.js';
 import { createContent, updateContent } from "../services/content-service.js";
 
 function queryParams(req) {
@@ -10,6 +11,12 @@ function queryParams(req) {
 }
 
 export function registerContentRoutes(router, { config, db }) {
+  router.add('PATCH','/api/v1/contents/:id/publications/:platformCode',async(req,res,context)=>{
+    const principal=authenticateRequest(req,config);
+    const body=await readJson(req,config.bodyLimitBytes);
+    const result=updatePublication(context.params.id,context.params.platformCode,body,body?.version,{db,actor:principal.actor,requestId:context.requestId});
+    sendData(res,200,result,{requestId:context.requestId});
+  });
   router.add("GET", "/api/v1/contents", async (req, res, context) => {
     const query = queryParams(req);
     const contentType = query.get("contentType") || undefined;

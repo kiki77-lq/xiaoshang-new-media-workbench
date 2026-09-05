@@ -7,7 +7,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { loadConfig } from "./config.js";
 import { openDatabase } from "./db/connection.js";
-import { getSchemaVersion, runMigrations } from "./db/migrate.js";
+import { getSchemaVersion, inspectMigrations, runMigrations } from "./db/migrate.js";
+import { createBackup, verifyBackup } from './services/backup-service.js';
+import { registerCalendarRoutes } from './routes/calendar-events.js';
 import { appendAuditLog } from "./repositories/audit-repository.js";
 import { loadOrCreateSecrets, rotateToken } from "./security/secrets.js";
 import { authenticateRequest } from "./http/auth.js";
@@ -100,6 +102,7 @@ function buildRouter(config, db) {
   registerInspirationRoutes(router, { config, db });
   registerContentRoutes(router, { config, db });
   registerDashboardRoutes(router, { config, db });
+  registerCalendarRoutes(router, { config, db });
 
   router.add("GET", "/api/v1/health", async (_req, res, context) => {
     sendData(res, 200, {
@@ -183,7 +186,12 @@ export async function prepareWorkbench({
   config.gitSha ||= resolveGitSha(config.projectRoot);
   const db = openDatabase({ dbPath: config.dbPath });
   try {
-    runMigrations(db, migrationDir ? { migrationDir } : undefined);
+    const options = migrationDir ? { migrationDir } : undefined;
+    if (inspectMigrations(db, options).pending.length) {
+      const manifest = await createBackup({ db, dataDir: config.dataDir, reason: 'pre-migration', appVersion: config.appVersion });
+      if (!(await verifyBackup(manifest)).ok) throw new Error('PRE_MIGRATION_BACKUP_VERIFICATION_FAILED');
+    }
+    runMigrations(db, options);
   } catch (error) {
     db.close();
     throw error;

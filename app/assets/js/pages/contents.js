@@ -1,7 +1,8 @@
 import { closeModal, openModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { emptyState, escapeHtml, pageHeader, statCard } from "../shared/dom.js";
-import { serializeForm } from "../shared/forms.js";
+import { serializeForm, showFormError } from "../shared/forms.js";
+import { shanghaiDateTime, shanghaiInputToUtc, displayShanghai } from '../shared/format.js';
 
 const TYPE_LABELS = { organic: "纯享", commercial: "商单" };
 const STATUS_LABELS = { preparing: "准备中", producing: "制作中", ready: "待发布", published: "已发布" };
@@ -93,7 +94,48 @@ function openEditContent(content, { api, reload }) {
 }
 
 function publicationGrid(publications = []) {
-  return `<div class="publication-grid">${publications.map((publication) => `<div class="publication-state" data-publication-platform="${escapeHtml(publication.platformCode)}"><strong>${escapeHtml(publication.platformName)}</strong><span class="status-badge publication-${escapeHtml(publication.status)}">${escapeHtml(PUBLICATION_LABELS[publication.status] || publication.status)}</span></div>`).join("")}</div>`;
+  return `<div class="publication-grid">${publications.map((publication) => `<div class="publication-state" data-publication-platform="${escapeHtml(publication.platformCode)}"><strong>${escapeHtml(publication.platformName)}</strong><span class="status-badge publication-${escapeHtml(publication.status)}">${escapeHtml(PUBLICATION_LABELS[publication.status] || publication.status)}</span>${publication.scheduledAt ? `<time datetime="${escapeHtml(publication.scheduledAt)}">${displayShanghai(publication.scheduledAt)}</time>` : ''}</div>`).join("")}</div>`;
+}
+
+function openPublicationEditor(content, publication, controls) {
+  const history = Boolean(publication.publishedAt || publication.status === 'published');
+  const dateInput = (label, name, value) => `<label class="form-field"><span>${label}</span><input type="datetime-local" step="0.001" name="${name}" value="${shanghaiDateTime(value)}"${history ? ' disabled' : ''}></label>`;
+  openModal({ title: `编辑${publication.platformName}发布`, content: `<form class="workbench-form" data-publication-form>
+    <p class="form-field-wide">${escapeHtml(content.title)} · 所有时间均为上海时间${history ? '。已发布日期已锁定，历史保留。' : ''}</p>
+    <label class="form-field form-field-wide"><span>发布状态</span><select name="status">${Object.entries(PUBLICATION_LABELS).map(([code,label])=>`<option value="${code}"${publication.status===code?' selected':''}>${label}</option>`).join('')}</select></label>
+    ${dateInput('计划发布时间（上海）','scheduledAt',publication.scheduledAt)}
+    ${dateInput('实际发布时间（上海）','publishedAt',publication.publishedAt)}
+    ${input('作品链接','publishedUrl',publication.publishedUrl)}
+    ${input('平台作品 ID','platformContentId',publication.platformContentId)}
+    <label class="form-field form-field-wide"><span>变更原因</span><textarea name="reason" rows="2" maxlength="1000" placeholder="状态回退或取消排期时必填，保留在变更记录中"></textarea></label>
+    <div class="form-error form-field-wide" role="alert" tabindex="-1" data-form-error hidden></div>
+    <footer class="form-actions"><button class="btn btn-secondary" type="button" data-modal-close>取消</button><button class="btn btn-primary" type="submit">保存发布</button></footer>
+  </form>` });
+  const form = document.querySelector('[data-publication-form]');
+  const fields = form.elements;
+  const statuses = Object.keys(PUBLICATION_LABELS);
+  const updateRequirements = () => {
+    fields.reason.required = statuses.indexOf(fields.status.value) < statuses.indexOf(publication.status);
+    fields.scheduledAt.required = fields.status.value === 'scheduled';
+    fields.publishedAt.required = fields.status.value === 'published';
+    if (!history && statuses.indexOf(fields.status.value) < 4) fields.scheduledAt.value = '';
+  };
+  fields.status.addEventListener('change', updateRequirements); updateRequirements();
+  form.addEventListener('submit', async event => {
+    event.preventDefault(); const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
+    try {
+      const body = { status: fields.status.value, reason: fields.reason.value, publishedUrl: fields.publishedUrl.value, platformContentId: fields.platformContentId.value };
+      if (!history) { body.scheduledAt = shanghaiInputToUtc(fields.scheduledAt.value); body.publishedAt = shanghaiInputToUtc(fields.publishedAt.value); }
+      await controls.api.patch(`/contents/${content.id}/publications/${publication.platformCode}`, body, { version: publication.version });
+      closeModal(); showToast('平台发布状态与日历已同步。','success'); await controls.reload();
+    } catch (error) {
+      submit.disabled = false;
+      showFormError(form,error,async()=>{
+        const fresh = (await controls.api.get(`/contents/${content.id}`)).data;
+        openPublicationEditor(fresh,fresh.publications.find(p=>p.id===publication.id),controls);
+      });
+    }
+  });
 }
 
 function openContentDetail(content, controls) {
@@ -102,11 +144,12 @@ function openContentDetail(content, controls) {
     content: `<article class="content-detail">
       <div class="detail-heading"><div><span class="status-badge type-${escapeHtml(content.contentType)}">${escapeHtml(TYPE_LABELS[content.contentType])}</span><h3>${escapeHtml(content.title)}</h3><p>${escapeHtml([content.brand, content.vehicleModel].filter(Boolean).join(" · ") || "未标注品牌车型")}</p></div><span class="status-badge content-${escapeHtml(content.status)}">${escapeHtml(STATUS_LABELS[content.status])}</span></div>
       ${content.summary ? `<section><small>内容摘要</small><p>${escapeHtml(content.summary)}</p></section>` : ""}
-      <section><small>四平台发布状态</small>${publicationGrid(content.publications)}</section>
+      <section><small>四平台发布状态 · 上海时间</small>${publicationGrid(content.publications)}<div class="publication-edit-actions">${content.publications.map(p=>`<button type="button" class="btn btn-secondary" data-edit-publication="${escapeHtml(p.id)}">编辑${escapeHtml(p.platformName)}发布</button>`).join('')}</div></section>
       <footer class="form-actions"><button class="btn btn-secondary" type="button" data-modal-close>关闭</button><button class="btn btn-primary" type="button" data-detail-edit>编辑内容</button></footer>
     </article>`
   });
   document.querySelector("[data-detail-edit]")?.addEventListener("click", () => openEditContent(content, controls));
+  document.querySelectorAll('[data-edit-publication]').forEach(button=>button.addEventListener('click',()=>openPublicationEditor(content,content.publications.find(p=>p.id===button.dataset.editPublication),controls)));
 }
 
 function renderContentRow(content) {

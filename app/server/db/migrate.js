@@ -51,7 +51,7 @@ export function getSchemaVersion(db) {
     .get().version;
 }
 
-export function runMigrations(db, { migrationDir = DEFAULT_MIGRATION_DIR } = {}) {
+export function inspectMigrations(db, { migrationDir = DEFAULT_MIGRATION_DIR } = {}) {
   const migrations = listMigrations(migrationDir);
   const fromVersion = getSchemaVersion(db);
   const applied = hasMigrationTable(db)
@@ -65,9 +65,13 @@ export function runMigrations(db, { migrationDir = DEFAULT_MIGRATION_DIR } = {})
     }
   }
 
+  return { fromVersion, pending: migrations.filter(migration => !applied.has(migration.version)) };
+}
+
+export function runMigrations(db, options = {}) {
+  const { fromVersion, pending } = inspectMigrations(db, options);
   const appliedVersions = [];
-  for (const migration of migrations) {
-    if (applied.has(migration.version)) continue;
+  for (const migration of pending) {
 
     db.exec("BEGIN IMMEDIATE");
     try {

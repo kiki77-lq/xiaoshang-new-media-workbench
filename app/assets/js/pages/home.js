@@ -28,7 +28,7 @@ export function renderHome({ data, loading = false, error = null } = {}) {
   return `<section class="page page-home">
     ${pageHeader("首页", "四平台内容运营总览 · 数据来自本地 SQLite")}
     <div class="stats-grid stats-four">
-      ${statCard("本月内容", "accent", "▤", "按当前自然月统计", metric(dashboard.monthContentCount), "month-content-count")}${statCard("制作中", "pending", "▷", "整体状态为制作中", metric(dashboard.producingCount), "producing-count")}${statCard("今日待发布", "warning", "◷", "发布日历将在 PHASE 4 接入", metric(dashboard.todayPublishCount), "today-publish-count")}${statCard("需要处理", "danger", "!", "暂无对应数据来源", metric(dashboard.needsAttentionCount), "needs-attention-count")}
+      ${statCard("本月内容", "accent", "▤", "按上海时间自然月统计", metric(dashboard.monthContentCount), "month-content-count")}${statCard("制作中", "pending", "▷", "整体状态为制作中", metric(dashboard.producingCount), "producing-count")}${statCard("今日待发布", "warning", "◷", "上海今日 · 尚未完成的发布排期", metric(dashboard.todayPublishCount), "today-publish-count")}${statCard("需要处理", "danger", "!", "尚未完成的待确认安排", metric(dashboard.needsAttentionCount), "needs-attention-count")}
     </div>
     <div class="home-grid">
       <section class="content-section platform-section"><div class="section-heading"><div><h2>四平台矩阵</h2><p>统一查看内容在各渠道的当前状态</p></div><span class="data-state">SQLite 实时数据</span></div>

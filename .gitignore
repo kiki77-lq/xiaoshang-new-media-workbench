@@ -15,6 +15,9 @@
 *.db-shm
 *.db-wal
 *.sqlite
+*.sqlite-wal
+*.sqlite-shm
+secrets.json
 *.sqlite3
 
 # Dependencies, build artifacts, logs, and operating-system files.

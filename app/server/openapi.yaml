@@ -1,11 +1,151 @@
 openapi: 3.1.0
 info:
   title: Xiaoshang New Media Workbench Local API
-  version: 0.3.0
-  description: PHASE 3 local API. SQLite remains the only business source of truth.
+  version: 0.4.0
+  description: PHASE 4 local API. SQLite is the sole business source. All dates are normalized to UTC ISO8601; UI uses Asia/Shanghai. No business fixtures are created at startup.
 servers:
   - url: http://127.0.0.1:5173/api/v1
 paths:
+  /contents/{id}/publications/{platformCode}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - name: platformCode
+        in: path
+        required: true
+        schema: { type: string, enum: [douyin, wechat_channels, xiaohongshu, weibo] }
+    patch:
+      operationId: updatePublication
+      summary: Update one of a content's four platform publications
+      description: >-
+        Forward status jumps are permitted; backward transitions require a nonblank reason recorded in audit.
+        scheduled requires scheduledAt; published requires publishedAt. Supplying a schedule without a status
+        sets scheduled. Clearing a schedule restores scheduled to ready and requires a reason.
+        A backward transition below scheduled clears an unpublished schedule. Calendar and publication updates,
+        affected versions and audit are atomic. A second active publish event is rejected.
+        Recorded publishedAt and scheduledAt are immutable once published; history remains protected after
+        a reasoned backward status transition. Invalid dates, timezone-less timestamps and non-HTTP(S) URLs are rejected.
+        A reschedule that would put startsAt after an existing endsAt is rejected; edit both times via the calendar API.
+      security: [{ bearerAuth: [] }, { sameOrigin: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdatePublicationInput' }
+      responses:
+        '200':
+          description: Updated publication
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicationEnvelope' }
+        '400': { $ref: '#/components/responses/SchedulingValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/OriginForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/SchedulingConflict' }
+  /calendar-events:
+    get:
+      operationId: listCalendarEvents
+      summary: Read events whose start is in an explicit half-open date range
+      description: from is inclusive; to is exclusive. Both require valid ISO8601 timestamps with an explicit timezone. Cancelled and completed records remain visible with their status.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: eventType
+          in: query
+          schema: { $ref: '#/components/schemas/CalendarEventType' }
+      responses:
+        '200':
+          description: All events in the bounded range, ordered by startsAt then id
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalendarListEnvelope' }
+        '400': { $ref: '#/components/responses/SchedulingValidationError' }
+        '403': { $ref: '#/components/responses/HostForbidden' }
+    post:
+      operationId: createCalendarEvent
+      summary: Create a shoot, publish or pending confirmation event
+      description: >-
+        Publish requires publicationId; contentId is derived from it and must match if supplied.
+        Non-publish events cannot carry publicationId. A publish event must initially be planned or confirmed;
+        creating it atomically sets the publication to scheduled and scheduledAt to startsAt.
+        The same Idempotency-Key replays the original response; another key cannot duplicate an active publication schedule.
+      security: [{ bearerAuth: [] }, { sameOrigin: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCalendarEventInput' }
+      responses:
+        '201':
+          description: Created event or idempotent replay
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalendarEventEnvelope' }
+        '400': { $ref: '#/components/responses/SchedulingValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/OriginForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/SchedulingConflict' }
+  /calendar-events/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    patch:
+      operationId: updateCalendarEvent
+      summary: Edit event details and synchronize publication scheduling atomically
+      description: >-
+        Event type and content/publication links are immutable. endsAt must be null or at/after startsAt.
+        A linked publication version also advances. Cancelling an unpublished schedule clears scheduledAt and
+        restores scheduled to ready, requiring reason. Completed publish events can only be produced by recording
+        publishedAt via the publication API. Previously published events cannot be edited or cancelled.
+      security: [{ bearerAuth: [] }, { sameOrigin: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCalendarEventInput' }
+      responses:
+        '200':
+          description: Updated event
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalendarEventEnvelope' }
+        '400': { $ref: '#/components/responses/SchedulingValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/OriginForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/SchedulingConflict' }
+    delete:
+      operationId: deleteCalendarEvent
+      summary: Delete an event with a checked version and audit entry
+      description: >-
+        JSON body version is mandatory. When deleting the last unpublished active publish schedule,
+        clear scheduledAt and restore scheduled to ready atomically. That backward transition requires reason.
+        Deleting an old cancelled event does not clear a newer active schedule. Published history cannot be deleted.
+      security: [{ bearerAuth: [] }, { sameOrigin: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeleteCalendarEventInput' }
+      responses:
+        '200':
+          description: Deleted event receipt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalendarDeleteEnvelope' }
+        '400': { $ref: '#/components/responses/SchedulingValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/OriginForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/SchedulingConflict' }
   /health:
     get:
       operationId: getHealth
@@ -338,6 +478,108 @@ components:
         maxLength: 200
       description: Repeating the same key and request replays the first response.
   schemas:
+    CalendarEventType:
+      type: string
+      enum: [shoot, publish, pending_confirmation]
+    CalendarEventStatus:
+      type: string
+      enum: [planned, confirmed, completed, cancelled]
+    UpdatePublicationInput:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 1 }
+        status: { $ref: '#/components/schemas/PublicationStatus' }
+        scheduledAt: { type: [string, 'null'], format: date-time }
+        publishedAt: { type: [string, 'null'], format: date-time }
+        publishedUrl: { type: [string, 'null'], format: uri, maxLength: 2048 }
+        platformContentId: { type: [string, 'null'], maxLength: 240 }
+        reason: { type: [string, 'null'], maxLength: 1000, description: Nonblank reason required for every backward transition. }
+    CreateCalendarEventInput:
+      type: object
+      additionalProperties: false
+      required: [eventType, title, startsAt]
+      properties:
+        eventType: { $ref: '#/components/schemas/CalendarEventType' }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: [string, 'null'], format: date-time, description: Must be at or after startsAt. }
+        contentId: { type: [string, 'null'], maxLength: 100 }
+        publicationId: { type: [string, 'null'], maxLength: 100 }
+        notes: { type: [string, 'null'], maxLength: 5000 }
+        status: { $ref: '#/components/schemas/CalendarEventStatus' }
+    UpdateCalendarEventInput:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 1 }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: [string, 'null'], format: date-time }
+        notes: { type: [string, 'null'], maxLength: 5000 }
+        status: { $ref: '#/components/schemas/CalendarEventStatus' }
+        reason: { type: [string, 'null'], maxLength: 1000 }
+    DeleteCalendarEventInput:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 1 }
+        reason: { type: [string, 'null'], maxLength: 1000 }
+    CalendarEvent:
+      type: object
+      required: [id, contentId, publicationId, eventType, status, title, startsAt, endsAt, notes, createdAt, updatedAt, version, platformCode, platformName]
+      properties:
+        id: { type: string }
+        contentId: { type: [string, 'null'] }
+        publicationId: { type: [string, 'null'] }
+        eventType: { $ref: '#/components/schemas/CalendarEventType' }
+        status: { $ref: '#/components/schemas/CalendarEventStatus' }
+        title: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: [string, 'null'], format: date-time }
+        notes: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+        platformCode: { type: [string, 'null'], enum: [douyin, wechat_channels, xiaohongshu, weibo, null] }
+        platformName: { type: [string, 'null'] }
+    PublicationEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/Publication' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    CalendarEventEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/CalendarEvent' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    CalendarListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items, total]
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/CalendarEvent' } }
+            total: { type: integer, minimum: 0 }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    CalendarDeleteEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [id, deleted]
+          properties:
+            id: { type: string }
+            deleted: { const: true }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
     RequestMeta:
       type: object
       required: [requestId]
@@ -539,6 +781,8 @@ components:
       required: [id, platformCode, platformName, status, createdAt, updatedAt, version]
       properties:
         id: { type: string }
+        contentId: { type: string, description: Included by the publication update endpoint. }
+        contentTitle: { type: string, description: Included by the publication update endpoint. }
         platformCode: { type: string, enum: [douyin, wechat_channels, xiaohongshu, weibo] }
         platformName: { type: string }
         status:
@@ -620,8 +864,8 @@ components:
       properties:
         monthContentCount: { type: integer, minimum: 0 }
         producingCount: { type: integer, minimum: 0 }
-        todayPublishCount: { type: integer, minimum: 0 }
-        needsAttentionCount: { type: integer, minimum: 0 }
+        todayPublishCount: { type: integer, minimum: 0, description: Planned/confirmed publish events today in Asia/Shanghai whose publication is scheduled. }
+        needsAttentionCount: { type: integer, minimum: 0, description: Pending confirmation events that are planned or confirmed and not completed/cancelled. }
         platforms:
           type: array
           items:
@@ -639,6 +883,16 @@ components:
           type: array
           description: Empty until the hotspot phase is implemented.
   responses:
+    SchedulingValidationError:
+      description: 'VALIDATION_ERROR, VERSION_REQUIRED, REASON_REQUIRED, PUBLICATION_REQUIRED or IDEMPOTENCY_KEY_REQUIRED. Body fields, enums, positive integer versions, URLs, timestamps and endsAt are validated.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    SchedulingConflict:
+      description: 'VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, PUBLICATION_ALREADY_SCHEDULED or PUBLISHED_HISTORY_PROTECTED. No partial writes survive.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     ValidationError:
       description: Request validation failed or immutable rawText was supplied
       content:

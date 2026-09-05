@@ -1,7 +1,7 @@
 import { api } from "./api/client.js";
 import { renderShell } from "./components/shell.js";
 import { attachAnalytics } from "./pages/analytics.js";
-import { attachCalendar } from "./pages/calendar.js";
+import { attachCalendar, calendarRange } from "./pages/calendar.js";
 import { attachContents } from "./pages/contents.js";
 import { getPage } from "./pages/index.js";
 import { attachInspirations, openCreateInspiration } from "./pages/inspirations.js";
@@ -20,7 +20,8 @@ const state = {
   requestSequence: 0,
   filters: {
     inspirations: { filter: "all", search: "" },
-    contents: { status: "all", contentType: "all", search: "" }
+    contents: { status: "all", contentType: "all", search: "" },
+    calendar: { eventType: 'all' }
   }
 };
 
@@ -46,11 +47,21 @@ function pageEndpoint(name) {
   if (name === "home") return "/dashboard";
   if (name === "inspirations") return `/inspirations${queryForPage(name)}`;
   if (name === "contents") return `/contents${queryForPage(name)}`;
+  if (name === 'calendar') {
+    const query = new URLSearchParams(calendarRange(state.calendarDate));
+    if (state.filters.calendar.eventType !== 'all') query.set('eventType', state.filters.calendar.eventType);
+    return `/calendar-events?${query}`;
+  }
   return null;
 }
 
 function coreControls(name) {
   const reload = () => loadPage(state.activeRoute, { showLoading: false });
+  if (name === 'calendar') return {
+    api, data: state.pageData.calendar, reload,
+    setFilters(filters) { state.filters.calendar = filters; loadPage(state.activeRoute); },
+    onMonthChange(date) { state.calendarDate = date; loadPage(state.activeRoute); }
+  };
   if (name === "inspirations") {
     return {
       api,
@@ -93,7 +104,7 @@ function renderPage(route) {
     filters: state.filters[route.name]
   });
   document.title = `${page.title}｜小商的拍车日记`;
-  if (route.name === "calendar") attachCalendar(outlet, { onMonthChange(date) { state.calendarDate = date; renderPage(route); } });
+  if (route.name === "calendar") attachCalendar(outlet, coreControls('calendar'));
   if (route.name === "analytics") attachAnalytics(outlet);
   if (route.name === "inspirations") attachInspirations(outlet, coreControls("inspirations"));
   if (route.name === "contents") attachContents(outlet, coreControls("contents"));
@@ -109,9 +120,9 @@ async function loadPage(route, { showLoading = true } = {}) {
     renderPage(route);
   }
   try {
-    const result = await api.get(endpoint);
+    const [result, contentResult] = await Promise.all([api.get(endpoint), route.name === 'calendar' ? api.get('/contents') : Promise.resolve(null)]);
     if (sequence !== state.requestSequence || state.activeRoute?.name !== route.name) return;
-    state.pageData[route.name] = result.data;
+    state.pageData[route.name] = contentResult ? { ...result.data, contents: contentResult.data.items } : result.data;
     state.pageErrors[route.name] = null;
   } catch (error) {
     if (sequence !== state.requestSequence || state.activeRoute?.name !== route.name) return;
@@ -122,6 +133,7 @@ async function loadPage(route, { showLoading = true } = {}) {
       renderPage(route);
     }
   }
+  return state.pageData[route.name];
 }
 
 function bindShellControls() {

@@ -26,3 +26,13 @@
 .detail-heading h3 { margin: 8px 0 2px; font-size: 21px; }
 .content-detail section > small { display: block; margin-bottom: 8px; color: var(--muted); }
 .content-detail .publication-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.publication-state { flex-wrap: wrap; }
+.publication-state time { flex-basis: 100%; color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+.publication-edit-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.publication-scheduled { color: var(--accent) !important; }
+.form-error { padding: 10px; color: var(--danger); border: 1px solid var(--danger); border-radius: 8px; overflow-wrap: anywhere; }
+.form-error[hidden] { display: none; }
+.form-error .btn { display: block; margin-top: 10px; }
+.form-field input:focus-visible, .form-field select:focus-visible, .form-field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.form-field input:disabled { opacity: .7; cursor: not-allowed; }
+[data-publication-form] input, [data-calendar-form] input { min-width: 0; max-width: 100%; }
