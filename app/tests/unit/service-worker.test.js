@@ -48,7 +48,37 @@ test("service worker precache never contains an API URL", () => {
   const assetsMatch = source.match(/const ASSETS = \[([\s\S]*?)\];/);
 
   assert.ok(assetsMatch, "static asset list must exist");
-  assert.doesNotMatch(assetsMatch[1], /\/api\//);
+  assert.doesNotMatch(assetsMatch[1], /["']\/api\//);
   assert.match(source, /url\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(source, /fetch\(e\.request\)/);
+});
+
+test("PHASE 3 service worker upgrades the shell cache and removes v2", async () => {
+  const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+  const source = fs.readFileSync(path.join(appDir, "sw.js"), "utf8");
+  const listeners = new Map();
+  const deleted = [];
+  const context = {
+    URL,
+    Promise,
+    self: {
+      addEventListener: (name, handler) => listeners.set(name, handler),
+      skipWaiting: () => {},
+      clients: { claim: async () => {} }
+    },
+    caches: {
+      keys: async () => ["xiaoshang-shell-v2", "xiaoshang-shell-v3"],
+      delete: async (key) => { deleted.push(key); return true; },
+      open: async () => ({ addAll: async () => {} }),
+      match: async () => null
+    },
+    fetch: async () => ({ clone() { return this; } })
+  };
+  vm.runInNewContext(source, context, { filename: "sw.js" });
+  let activation;
+  listeners.get("activate")({ waitUntil: (promise) => { activation = promise; } });
+  await activation;
+
+  assert.match(source, /const CACHE = "xiaoshang-shell-v3"/);
+  assert.deepEqual(deleted, ["xiaoshang-shell-v2"]);
 });

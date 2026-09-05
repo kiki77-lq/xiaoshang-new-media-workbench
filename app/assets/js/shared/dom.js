@@ -8,8 +8,9 @@ export function pageHeader(title, subtitle, actions = "") {
   return `<header class="page-header"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="page-actions">${actions}</div></header>`;
 }
 
-export function statCard(label, tone = "accent", icon = "◇", note = "等待业务数据") {
-  return `<article class="stat-card"><span class="stat-icon tone-${tone}">${icon}</span><div><span class="stat-label">${label}</span><strong>—</strong><small>${note}</small></div></article>`;
+export function statCard(label, tone = "accent", icon = "◇", note = "等待业务数据", value = "—", metric = "") {
+  const metricAttribute = metric ? ` data-metric="${escapeHtml(metric)}"` : "";
+  return `<article class="stat-card"${metricAttribute}><span class="stat-icon tone-${tone}">${icon}</span><div><span class="stat-label">${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(note)}</small></div></article>`;
 }
 
 export function emptyState(title, description, icon = "◇") {

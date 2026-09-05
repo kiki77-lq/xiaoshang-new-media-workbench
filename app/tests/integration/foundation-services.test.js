@@ -95,6 +95,28 @@ test("idempotency key cannot be reused for a different request", async (t) => {
   );
 });
 
+test("expired idempotency keys can be safely reused", async (t) => {
+  const paths = createTempWorkbench(t);
+  const db = openDatabase({ dbPath: paths.dbPath });
+  t.after(() => db.close());
+  runMigrations(db);
+  let executions = 0;
+  const base = {
+    db,
+    key: "expired-key",
+    method: "POST",
+    path: "/api/v1/foundation-probe",
+    execute: () => ({ status: 201, body: { data: { execution: ++executions }, meta: {} } })
+  };
+  await withIdempotency({ ...base, requestBody: { value: 1 } });
+  db.prepare("UPDATE idempotency_keys SET expires_at = '2000-01-01T00:00:00.000Z' WHERE key = ?").run(base.key);
+  const reused = await withIdempotency({ ...base, requestBody: { value: 2 } });
+
+  assert.equal(reused.replayed, false);
+  assert.equal(reused.body.data.execution, 2);
+  assert.equal(db.prepare("SELECT count(*) AS count FROM idempotency_keys WHERE key = ?").get(base.key).count, 1);
+});
+
 test("optimistic lock rejects stale versions with VERSION_CONFLICT", () => {
   assert.doesNotThrow(() => assertVersion({ expectedVersion: 3, actualVersion: 3 }));
   assert.throws(

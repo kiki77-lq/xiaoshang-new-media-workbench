@@ -31,7 +31,7 @@ export function renderShell(activeName) {
       <div class="topbar">
         <button class="icon-button mobile-menu" id="menu-toggle" type="button" aria-label="打开导航" aria-expanded="false">☰</button>
         <label class="global-search"><span>⌕</span><input type="search" placeholder="搜索内容、灵感、数据…" disabled><small>即将开放</small></label>
-        <button class="btn btn-primary" type="button" disabled>＋ 新增灵感<span class="future-tag">后续开放</span></button>
+        <button class="btn btn-primary quick-inspiration" type="button" data-quick-inspiration>＋ 快速新增灵感</button>
       </div>
       <main id="page-outlet" data-page="${activeName}" tabindex="-1"></main>
     </div>

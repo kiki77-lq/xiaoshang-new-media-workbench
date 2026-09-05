@@ -4,3 +4,15 @@
 .empty-card-preview .pin { grid-column: 1 / -1; width: fit-content; color: var(--warning); font-size: 11px; }
 .idea-icon { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 13px; color: var(--accent); background: var(--accent-soft); font-size: 23px; }
 .empty-card-preview p { margin: 5px 0 0; }
+.inspiration-list { display: grid; align-content: start; gap: 12px; }
+.inspiration-card { padding: 18px; border: 1px solid var(--border); border-radius: 13px; background: #080e12; }
+.inspiration-card.is-pinned { border-color: rgba(245, 166, 35, .45); }
+.inspiration-card-top, .inspiration-title, .card-actions, .badge-row, .inspiration-meta { display: flex; align-items: center; }
+.inspiration-card-top { justify-content: space-between; gap: 16px; }
+.inspiration-title { min-width: 0; gap: 13px; }
+.inspiration-title h3 { margin: 7px 0 0; overflow-wrap: anywhere; }
+.badge-row, .card-actions { flex-wrap: wrap; gap: 7px; }
+.inspiration-card blockquote { margin: 16px 0 12px; padding: 13px 15px; border-left: 2px solid var(--accent); border-radius: 0 9px 9px 0; background: rgba(19, 200, 245, .04); color: #dbe3e7; overflow-wrap: anywhere; }
+.inspiration-card blockquote span { display: block; margin-bottom: 4px; color: var(--muted); font-size: 10px; letter-spacing: .08em; }
+.inspiration-meta { flex-wrap: wrap; gap: 7px 18px; color: var(--muted); font-size: 11px; }
+.inspiration-card .tag-list { margin-top: 12px; }

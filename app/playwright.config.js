@@ -1,4 +1,10 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
 import { defineConfig } from "@playwright/test";
+
+const isolatedDataDirectory = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "xiaoshang-phase-3-e2e-")), "data");
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -20,7 +26,7 @@ export default defineConfig({
       ...process.env,
       WORKBENCH_HOST: "127.0.0.1",
       WORKBENCH_PORT: "4173",
-      WORKBENCH_DATA_DIR: "/tmp/xiaoshang-phase-2-playwright-data"
+      WORKBENCH_DATA_DIR: isolatedDataDirectory
     }
   }
 });

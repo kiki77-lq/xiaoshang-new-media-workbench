@@ -33,6 +33,11 @@ function replay(row, method, path, hash) {
   };
 }
 
+function isActive(row, now = Date.now()) {
+  const expiresAt = Date.parse(row.expires_at);
+  return Number.isFinite(expiresAt) && expiresAt > now;
+}
+
 export async function withIdempotency({
   db,
   key,
@@ -49,15 +54,16 @@ export async function withIdempotency({
   const hash = requestHash(requestBody);
   const select = db.prepare("SELECT * FROM idempotency_keys WHERE key = ?");
   const existing = select.get(key);
-  if (existing) return replay(existing, method, path, hash);
+  if (existing && isActive(existing)) return replay(existing, method, path, hash);
 
   db.exec("BEGIN IMMEDIATE");
   try {
     const raced = select.get(key);
-    if (raced) {
+    if (raced && isActive(raced)) {
       db.exec("COMMIT");
       return replay(raced, method, path, hash);
     }
+    if (raced) db.prepare("DELETE FROM idempotency_keys WHERE key = ?").run(key);
 
     const outcome = execute();
     if (outcome && typeof outcome.then === "function") {

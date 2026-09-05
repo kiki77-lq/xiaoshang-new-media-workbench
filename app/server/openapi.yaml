@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Xiaoshang New Media Workbench Local API
-  version: 0.1.0
-  description: PHASE 1 local-only API foundation. SQLite is the only business source of truth.
+  version: 0.3.0
+  description: PHASE 3 local API. SQLite remains the only business source of truth.
 servers:
   - url: http://127.0.0.1:5173/api/v1
 paths:
@@ -28,6 +28,253 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessEnvelope"
+  /inspirations:
+    get:
+      operationId: listInspirations
+      summary: List inspirations from SQLite
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/InspirationStatus"
+        - name: pinned
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Filtered inspirations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspirationListEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "403":
+          $ref: "#/components/responses/HostForbidden"
+    post:
+      operationId: createInspiration
+      summary: Persist an inspiration while preserving the original words
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInspirationInput"
+      responses:
+        "201":
+          description: Inspiration created or idempotently replayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspirationEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "409":
+          $ref: "#/components/responses/IdempotencyConflict"
+  /inspirations/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      operationId: getInspiration
+      summary: Read one inspiration
+      responses:
+        "200":
+          description: Inspiration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspirationEnvelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "403":
+          $ref: "#/components/responses/HostForbidden"
+    patch:
+      operationId: updateInspiration
+      summary: Update mutable inspiration metadata; rawText is immutable
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInspirationInput"
+      responses:
+        "200":
+          description: Inspiration updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspirationEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+  /inspirations/{id}/convert:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    post:
+      operationId: convertInspiration
+      summary: Atomically convert one inspiration into exactly one content record
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConvertInspirationInput"
+      responses:
+        "200":
+          description: Inspiration had already been converted; existing content returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversionEnvelope"
+        "201":
+          description: Inspiration converted, or the original result replayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversionEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConversionConflict"
+  /contents:
+    get:
+      operationId: listContents
+      summary: List content records without publication-join duplication
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - name: contentType
+          in: query
+          schema:
+            $ref: "#/components/schemas/ContentType"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ContentStatus"
+      responses:
+        "200":
+          description: Filtered content records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentListEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+    post:
+      operationId: createContent
+      summary: Create content and four not-started platform publication rows atomically
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContentInput"
+      responses:
+        "201":
+          description: Content created or idempotently replayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "409":
+          $ref: "#/components/responses/IdempotencyConflict"
+  /contents/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      operationId: getContent
+      summary: Read one content record with four platform publication states
+      responses:
+        "200":
+          description: Content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentEnvelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateContent
+      summary: Update content using optimistic locking
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateContentInput"
+      responses:
+        "200":
+          description: Content updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      summary: Read live homepage aggregates from SQLite
+      responses:
+        "200":
+          description: Dashboard aggregates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardEnvelope"
   /workbuddy/token/rotate:
     post:
       operationId: rotateWorkbuddyToken
@@ -61,36 +308,126 @@ components:
       scheme: bearer
       bearerFormat: local-token
       description: Token stored only in project-root data/secrets.json.
+    sameOrigin:
+      type: apiKey
+      in: header
+      name: Origin
+      description: Browser writes are accepted only when Origin matches the local service origin.
   parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    Search:
+      name: search
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 200
     IdempotencyKey:
       name: Idempotency-Key
       in: header
       required: true
       schema:
         type: string
+        minLength: 1
         maxLength: 200
       description: Repeating the same key and request replays the first response.
-    Version:
-      name: version
-      in: query
-      required: true
-      schema:
-        type: integer
-        minimum: 1
-      description: Stale versions return 409 VERSION_CONFLICT.
   schemas:
+    RequestMeta:
+      type: object
+      required: [requestId]
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        idempotencyReplayed:
+          type: boolean
     SuccessEnvelope:
       type: object
       required: [data, meta]
       properties:
         data: {}
         meta:
+          $ref: "#/components/schemas/RequestMeta"
+    InspirationEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/Inspiration"
+        meta:
+          $ref: "#/components/schemas/RequestMeta"
+    InspirationListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
           type: object
-          required: [requestId]
+          required: [items, total]
           properties:
-            requestId:
-              type: string
-              format: uuid
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Inspiration"
+            total:
+              type: integer
+              minimum: 0
+        meta:
+          $ref: "#/components/schemas/RequestMeta"
+    ContentEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/Content"
+        meta:
+          $ref: "#/components/schemas/RequestMeta"
+    ContentListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items, total]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Content"
+            total:
+              type: integer
+              minimum: 0
+        meta:
+          $ref: "#/components/schemas/RequestMeta"
+    ConversionEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [content, inspiration, alreadyConverted]
+          properties:
+            content:
+              $ref: "#/components/schemas/Content"
+            inspiration:
+              $ref: "#/components/schemas/Inspiration"
+            alreadyConverted:
+              type: boolean
+        meta:
+          $ref: "#/components/schemas/RequestMeta"
+    DashboardEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/Dashboard"
+        meta:
+          $ref: "#/components/schemas/RequestMeta"
     ErrorEnvelope:
       type: object
       required: [error, requestId]
@@ -108,7 +445,206 @@ components:
         requestId:
           type: string
           format: uuid
+    InspirationStatus:
+      type: string
+      enum: [inbox, organized, converted, archived]
+    ContentType:
+      type: string
+      enum: [organic, commercial]
+    ContentStatus:
+      type: string
+      enum: [preparing, producing, ready, published]
+    PublicationStatus:
+      type: string
+      enum: [not_started, preparing, producing, ready, scheduled, published]
+    Inspiration:
+      type: object
+      required: [id, rawText, summaryTitle, isFallbackTitle, pinned, status, tags, createdAt, updatedAt, version]
+      properties:
+        id: { type: string }
+        rawText: { type: string }
+        summaryTitle: { type: string }
+        isFallbackTitle: { type: boolean }
+        brand: { type: [string, "null"] }
+        vehicleModel: { type: [string, "null"] }
+        sourceType:
+          type: string
+          enum: [wechat, workbuddy, manual, hotspot, other]
+        sourcePlatform: { type: [string, "null"] }
+        sourceUrl: { type: [string, "null"], format: uri }
+        pinned: { type: boolean }
+        status:
+          $ref: "#/components/schemas/InspirationStatus"
+        convertedContentId: { type: [string, "null"] }
+        tags:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+    CreateInspirationInput:
+      type: object
+      required: [rawText]
+      additionalProperties: false
+      properties:
+        rawText: { type: string, minLength: 1 }
+        summaryTitle: { type: string }
+        brand: { type: string }
+        vehicleModel: { type: string }
+        sourceType: { type: string, enum: [wechat, workbuddy, manual, hotspot, other] }
+        sourcePlatform: { type: string }
+        sourceUrl: { type: string, format: uri }
+        pinned: { type: boolean }
+        tags:
+          type: array
+          items: { type: string }
+    UpdateInspirationInput:
+      type: object
+      required: [version]
+      description: rawText is deliberately absent and rejected by the API.
+      additionalProperties: false
+      properties:
+        summaryTitle: { type: string }
+        brand: { type: string }
+        vehicleModel: { type: string }
+        sourcePlatform: { type: string }
+        sourceUrl: { type: string, format: uri }
+        pinned: { type: boolean }
+        status:
+          $ref: "#/components/schemas/InspirationStatus"
+        tags:
+          type: array
+          items: { type: string }
+        version: { type: integer, minimum: 1 }
+    ConvertInspirationInput:
+      type: object
+      required: [version]
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1 }
+        contentType:
+          $ref: "#/components/schemas/ContentType"
+        status:
+          $ref: "#/components/schemas/ContentStatus"
+        brand: { type: string }
+        vehicleModel: { type: string }
+        summary: { type: string }
+        notes: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        version: { type: integer, minimum: 1 }
+    Publication:
+      type: object
+      required: [id, platformCode, platformName, status, createdAt, updatedAt, version]
+      properties:
+        id: { type: string }
+        platformCode: { type: string, enum: [douyin, wechat_channels, xiaohongshu, weibo] }
+        platformName: { type: string }
+        status:
+          $ref: "#/components/schemas/PublicationStatus"
+        scheduledAt: { type: [string, "null"], format: date-time }
+        publishedAt: { type: [string, "null"], format: date-time }
+        platformContentId: { type: [string, "null"] }
+        publishedUrl: { type: [string, "null"], format: uri }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+    Content:
+      type: object
+      required: [id, title, contentType, status, tags, publications, sourceInspirationIds, createdAt, updatedAt, version]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        contentType:
+          $ref: "#/components/schemas/ContentType"
+        status:
+          $ref: "#/components/schemas/ContentStatus"
+        brand: { type: [string, "null"] }
+        vehicleModel: { type: [string, "null"] }
+        summary: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        tags:
+          type: array
+          items: { type: string }
+        publications:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            $ref: "#/components/schemas/Publication"
+        sourceInspirationIds:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+    CreateContentInput:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1 }
+        contentType:
+          $ref: "#/components/schemas/ContentType"
+        status:
+          $ref: "#/components/schemas/ContentStatus"
+        brand: { type: string }
+        vehicleModel: { type: string }
+        summary: { type: string }
+        notes: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+    UpdateContentInput:
+      type: object
+      required: [version]
+      additionalProperties: false
+      properties:
+        title: { type: string }
+        contentType:
+          $ref: "#/components/schemas/ContentType"
+        status:
+          $ref: "#/components/schemas/ContentStatus"
+        brand: { type: string }
+        vehicleModel: { type: string }
+        summary: { type: string }
+        notes: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        version: { type: integer, minimum: 1 }
+    Dashboard:
+      type: object
+      required: [monthContentCount, producingCount, todayPublishCount, needsAttentionCount, platforms, recentContents, hotspotSummary]
+      properties:
+        monthContentCount: { type: integer, minimum: 0 }
+        producingCount: { type: integer, minimum: 0 }
+        todayPublishCount: { type: integer, minimum: 0 }
+        needsAttentionCount: { type: integer, minimum: 0 }
+        platforms:
+          type: array
+          items:
+            type: object
+            required: [code, displayName, enabled]
+            properties:
+              code: { type: string }
+              displayName: { type: string }
+              enabled: { type: boolean }
+        recentContents:
+          type: array
+          items:
+            $ref: "#/components/schemas/Content"
+        hotspotSummary:
+          type: array
+          description: Empty until the hotspot phase is implemented.
   responses:
+    ValidationError:
+      description: Request validation failed or immutable rawText was supplied
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
     Unauthorized:
       description: Missing or invalid bearer token
       content:
@@ -117,6 +653,36 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
     OriginForbidden:
       description: Browser write Origin is not same-origin
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    VersionConflict:
+      description: version is stale; error.code is VERSION_CONFLICT
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ConversionConflict:
+      description: version is stale or Idempotency-Key was reused with different input; error.code identifies the case
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    HostForbidden:
+      description: Host does not match an allowed local application origin
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    IdempotencyConflict:
+      description: Idempotency-Key was reused with a different request
       content:
         application/json:
           schema:

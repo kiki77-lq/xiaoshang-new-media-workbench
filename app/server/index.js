@@ -15,6 +15,9 @@ import { readJson } from "./http/body.js";
 import { HttpError } from "./http/errors.js";
 import { sendData, sendError } from "./http/response.js";
 import { createRouter } from "./http/router.js";
+import { registerContentRoutes } from "./routes/contents.js";
+import { registerDashboardRoutes } from "./routes/dashboard.js";
+import { registerInspirationRoutes } from "./routes/inspirations.js";
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -52,6 +55,14 @@ function decodeRequestPath(req) {
   }
 }
 
+function assertAllowedHost(req, config) {
+  const host = String(req.headers.host || "").toLowerCase();
+  const allowedHosts = new Set([...config.allowedOrigins].map((origin) => new URL(origin).host.toLowerCase()));
+  if (!host || !allowedHosts.has(host)) {
+    throw new HttpError(403, "HOST_FORBIDDEN", "Request Host is not allowed by the local service.");
+  }
+}
+
 function serveStatic(req, res, config, pathname) {
   if (req.method !== "GET" && req.method !== "HEAD") {
     throw new HttpError(405, "METHOD_NOT_ALLOWED", "Only GET and HEAD are allowed for static files.");
@@ -85,6 +96,10 @@ function serveStatic(req, res, config, pathname) {
 
 function buildRouter(config, db) {
   const router = createRouter();
+
+  registerInspirationRoutes(router, { config, db });
+  registerContentRoutes(router, { config, db });
+  registerDashboardRoutes(router, { config, db });
 
   router.add("GET", "/api/v1/health", async (_req, res, context) => {
     sendData(res, 200, {
@@ -139,6 +154,7 @@ export function createWorkbenchServer({ config, db }) {
   return http.createServer(async (req, res) => {
     const requestId = randomUUID();
     try {
+      assertAllowedHost(req, config);
       const pathname = decodeRequestPath(req);
       if (pathname.startsWith("/api/v1")) {
         const handled = await router.dispatch(req, res, { pathname, requestId });

@@ -2,11 +2,127 @@ import { api } from "./api/client.js";
 import { renderShell } from "./components/shell.js";
 import { attachAnalytics } from "./pages/analytics.js";
 import { attachCalendar } from "./pages/calendar.js";
+import { attachContents } from "./pages/contents.js";
 import { getPage } from "./pages/index.js";
+import { attachInspirations, openCreateInspiration } from "./pages/inspirations.js";
 import { createRouter } from "./router.js";
 
 const appRoot = document.querySelector("#app");
-const state = { activeRoute: null, calendarDate: new Date(), health: null, meta: null, apiError: null };
+const state = {
+  activeRoute: null,
+  calendarDate: new Date(),
+  health: null,
+  meta: null,
+  apiError: null,
+  pageData: {},
+  pageErrors: {},
+  pageLoading: {},
+  requestSequence: 0,
+  filters: {
+    inspirations: { filter: "all", search: "" },
+    contents: { status: "all", contentType: "all", search: "" }
+  }
+};
+
+function queryForPage(name) {
+  const query = new URLSearchParams();
+  if (name === "inspirations") {
+    const filters = state.filters.inspirations;
+    if (filters.search) query.set("search", filters.search);
+    if (filters.filter === "pinned") query.set("pinned", "true");
+    if (["inbox", "converted"].includes(filters.filter)) query.set("status", filters.filter);
+  }
+  if (name === "contents") {
+    const filters = state.filters.contents;
+    if (filters.search) query.set("search", filters.search);
+    if (filters.status !== "all") query.set("status", filters.status);
+    if (filters.contentType !== "all") query.set("contentType", filters.contentType);
+  }
+  const value = query.toString();
+  return value ? `?${value}` : "";
+}
+
+function pageEndpoint(name) {
+  if (name === "home") return "/dashboard";
+  if (name === "inspirations") return `/inspirations${queryForPage(name)}`;
+  if (name === "contents") return `/contents${queryForPage(name)}`;
+  return null;
+}
+
+function coreControls(name) {
+  const reload = () => loadPage(state.activeRoute, { showLoading: false });
+  if (name === "inspirations") {
+    return {
+      api,
+      data: state.pageData.inspirations,
+      filters: state.filters.inspirations,
+      reload,
+      setFilters(filters) {
+        state.filters.inspirations = filters;
+        loadPage(state.activeRoute);
+      }
+    };
+  }
+  return {
+    api,
+    data: state.pageData.contents,
+    filters: state.filters.contents,
+    reload,
+    setFilters(filters) {
+      state.filters.contents = filters;
+      loadPage(state.activeRoute);
+    }
+  };
+}
+
+function renderPage(route) {
+  if (!route || state.activeRoute?.name !== route.name) return;
+  const page = getPage(route.name);
+  const outlet = document.querySelector("#page-outlet");
+  if (!outlet) return;
+  outlet.dataset.page = route.name;
+  outlet.innerHTML = page.render({
+    now: new Date(),
+    calendarDate: state.calendarDate,
+    health: state.health,
+    meta: state.meta,
+    apiError: state.apiError,
+    data: state.pageData[route.name],
+    error: state.pageErrors[route.name],
+    loading: state.pageLoading[route.name],
+    filters: state.filters[route.name]
+  });
+  document.title = `${page.title}｜小商的拍车日记`;
+  if (route.name === "calendar") attachCalendar(outlet, { onMonthChange(date) { state.calendarDate = date; renderPage(route); } });
+  if (route.name === "analytics") attachAnalytics(outlet);
+  if (route.name === "inspirations") attachInspirations(outlet, coreControls("inspirations"));
+  if (route.name === "contents") attachContents(outlet, coreControls("contents"));
+}
+
+async function loadPage(route, { showLoading = true } = {}) {
+  const endpoint = pageEndpoint(route?.name);
+  if (!endpoint) return;
+  const sequence = ++state.requestSequence;
+  if (showLoading) {
+    state.pageLoading[route.name] = true;
+    state.pageErrors[route.name] = null;
+    renderPage(route);
+  }
+  try {
+    const result = await api.get(endpoint);
+    if (sequence !== state.requestSequence || state.activeRoute?.name !== route.name) return;
+    state.pageData[route.name] = result.data;
+    state.pageErrors[route.name] = null;
+  } catch (error) {
+    if (sequence !== state.requestSequence || state.activeRoute?.name !== route.name) return;
+    state.pageErrors[route.name] = error;
+  } finally {
+    if (sequence === state.requestSequence && state.activeRoute?.name === route.name) {
+      state.pageLoading[route.name] = false;
+      renderPage(route);
+    }
+  }
+}
 
 function bindShellControls() {
   const sidebar = document.querySelector("#sidebar");
@@ -19,18 +135,18 @@ function bindShellControls() {
   };
   toggle?.addEventListener("click", () => setOpen(!sidebar.classList.contains("is-open")));
   scrim?.addEventListener("click", () => setOpen(false));
+  document.querySelector("[data-quick-inspiration]")?.addEventListener("click", () => {
+    if (state.activeRoute?.name !== "inspirations") router.navigate("/inspirations");
+    openCreateInspiration({ api, reload: () => loadPage(state.activeRoute, { showLoading: false }) });
+  });
 }
 
 function renderRoute(route) {
   state.activeRoute = route;
-  const page = getPage(route.name);
   appRoot.innerHTML = renderShell(route.name);
-  const outlet = document.querySelector("#page-outlet");
-  outlet.innerHTML = page.render({ now: new Date(), calendarDate: state.calendarDate, health: state.health, meta: state.meta, apiError: state.apiError });
-  document.title = `${page.title}｜小商的拍车日记`;
   bindShellControls();
-  if (route.name === "calendar") attachCalendar(outlet, { onMonthChange(date) { state.calendarDate = date; renderRoute(route); } });
-  if (route.name === "analytics") attachAnalytics(outlet);
+  renderPage(route);
+  loadPage(route);
 }
 
 const router = createRouter({ onRoute: renderRoute });
@@ -42,7 +158,7 @@ async function loadRuntimeFacts() {
   if (metaResult.status === "fulfilled") state.meta = { ...metaResult.value.data, requestId: metaResult.value.requestId };
   const failure = [healthResult, metaResult].find((result) => result.status === "rejected");
   state.apiError = failure?.reason || null;
-  if (state.activeRoute) renderRoute(state.activeRoute);
+  if (state.activeRoute?.name === "settings") renderPage(state.activeRoute);
 }
 
 loadRuntimeFacts();
