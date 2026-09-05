@@ -25,6 +25,7 @@ import { registerPhase6Routes } from './routes/phase6.js';
 import { recordWorkbuddyRequest } from './services/settings-service.js';
 import { registerBackupRoutes } from './routes/backups.js';
 import { createOperationJournal } from './services/operation-journal.js';
+import { acquireDataLease, bindPreparedLease, retainServerLease } from './services/data-lease.js';
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -160,9 +161,14 @@ function buildRouter(config, db, lifecycle) {
   return router;
 }
 
-export function createWorkbenchServer({ config, db }) {
+export function createWorkbenchServer({ config, db, gated = false }) {
+  const dataLease = retainServerLease(db);
   let currentDb = db, router, maintaining = false, unavailable = false, drained;
+  let candidateGate = gated, stopping = false;
   const active = new Set();
+  // Restore/replay waiters leave the maintenance drain to avoid waiting on
+  // themselves, but remain owned by shutdown until their handlers settle.
+  const handlers = new Set();
   const lifecycle = {
     get db() { return currentDb; },
     tickets: new Map(),
@@ -189,9 +195,13 @@ export function createWorkbenchServer({ config, db }) {
     try {
       assertAllowedHost(req, config);
       const pathname = decodeRequestPath(req);
+      if (stopping || (candidateGate && !(req.method === 'GET' && pathname === '/api/v1/health' && !req.headers.authorization))) {
+        throw new HttpError(503, 'MAINTENANCE', '本地服务正在更新或停止，请稍后重试。');
+      }
       if (pathname.startsWith("/api/v1")) {
         if(maintaining||unavailable)throw new HttpError(503,'MAINTENANCE','数据库正在恢复或等待修复，请稍后重试。');
         active.add(requestId);
+        handlers.add(requestId);
         if (req.headers.authorization) {
           authenticateRequest({headers:{authorization:req.headers.authorization}},config);
           recordWorkbuddyRequest(currentDb);
@@ -206,48 +216,71 @@ export function createWorkbenchServer({ config, db }) {
       else res.end();
     } finally {
       active.delete(requestId);
+      handlers.delete(requestId);
       drained?.();
     }
   });
   Object.defineProperty(server,'database',{get:()=>currentDb});
-  server.on('close',()=>{if(currentDb.isOpen)currentDb.close();});
+  server.activate = () => { if(stopping || unavailable) throw new Error('SERVICE_UNAVAILABLE'); candidateGate = false; };
+  server.drain = async (timeoutMs = 30000) => {
+    stopping = true;
+    // Stop admitting requests before waiting for accepted handlers (including
+    // incomplete request bodies and asynchronous backups) to finish. A timeout
+    // deliberately leaves maintenance enabled and the database open.
+    const deadline = Date.now() + timeoutMs;
+    while (handlers.size) {
+      if (Date.now() >= deadline) throw new Error('REQUEST_DRAIN_TIMEOUT');
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  };
+  server.on('close',()=>{try{if(currentDb.isOpen)currentDb.close();}finally{dataLease?.release();}});
   return server;
 }
 
 export async function prepareWorkbench({
   projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."),
   env = process.env,
-  migrationDir
+  migrationDir,
+  operationId
 } = {}) {
   const config = loadConfig({ projectRoot, env });
-  for (const directory of [config.dataDir, config.backupsDir, config.importsDir, config.logsDir]) {
-    fs.mkdirSync(directory, { recursive: true });
-  }
-  const secrets = loadOrCreateSecrets({ dataDir: config.dataDir });
-  config.authToken = secrets.token;
-  config.gitSha ||= resolveGitSha(config.projectRoot);
-  const db = openDatabase({ dbPath: config.dbPath });
+  const lease = acquireDataLease({dataDir:config.dataDir,operationId});
+  let db;
   try {
+    // Maintenance may lease a missing file in order to restore it; a candidate
+    // must never turn that recovery gap into an empty initialized database.
+    if(operationId && !fs.existsSync(config.dbPath))throw new Error('PREVIOUS_DATABASE_MISSING');
+    for (const directory of [config.dataDir, config.backupsDir, config.importsDir, config.logsDir]) {
+      fs.mkdirSync(directory, { recursive: true });
+    }
+    const secrets = loadOrCreateSecrets({ dataDir: config.dataDir });
+    config.authToken = secrets.token;
+    config.gitSha ||= resolveGitSha(config.projectRoot);
+    db = openDatabase({ dbPath: config.dbPath });
     const options = migrationDir ? { migrationDir } : undefined;
     if (inspectMigrations(db, options).pending.length) {
       const manifest = await createBackup({ db, dataDir: config.dataDir, reason: 'pre-migration', appVersion: config.appVersion });
       if (!(await verifyBackup(manifest)).ok) throw new Error('PRE_MIGRATION_BACKUP_VERIFICATION_FAILED');
     }
     runMigrations(db, options);
+    bindPreparedLease(db,lease);
   } catch (error) {
-    db.close();
+    try{if(db?.isOpen)db.close();}finally{lease.release();}
     throw error;
   }
-  return { config, db };
+  return { config, db, lease };
 }
 
 export async function startWorkbench(options = {}) {
-  const { config, db } = await prepareWorkbench(options);
-  const server = createWorkbenchServer({ config, db });
-  server.listen(config.port, config.host, () => {
+  const { config, db, lease } = await prepareWorkbench(options);
+  let server;
+  try {
+    server = createWorkbenchServer({ config, db });
+    await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(config.port,config.host,resolve);});
     console.log(`Xiaoshang workbench listening on http://${config.host}:${config.port}`);
     console.log(`Database: ${config.dbPath}`);
-  });
+  } catch(error){try{if(db.isOpen)db.close();}finally{lease.release();}throw error;}
   return { config, get db() { return server.database; }, server };
 }
 

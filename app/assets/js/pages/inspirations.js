@@ -2,6 +2,9 @@ import { closeModal, openModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { emptyState, escapeHtml, pageHeader, statCard } from "../shared/dom.js";
 import { serializeForm } from "../shared/forms.js";
+import { displayShanghai } from "../shared/format.js";
+
+const SOURCE_LABELS = {manual:'手动记录',workbuddy:'WorkBuddy',wechat:'微信原文',hotspot:'热点来源',other:'其他来源'};
 
 const STATUS_LABELS = {
   inbox: "待整理",
@@ -140,7 +143,7 @@ function renderCard(inspiration) {
       <div class="card-actions"><button class="btn btn-secondary" type="button" data-edit-inspiration="${escapeHtml(inspiration.id)}" aria-label="编辑灵感 ${title}">编辑</button>${inspiration.convertedContentId ? `<a class="btn btn-secondary" href="/contents?focus=${encodeURIComponent(inspiration.convertedContentId)}" data-route="contents">查看关联内容</a>` : `<button class="btn btn-primary" type="button" data-convert-inspiration="${escapeHtml(inspiration.id)}" aria-label="转为内容 ${title}">转为内容</button>`}</div>
     </div>
     <blockquote><span>老板原话</span>${escapeHtml(inspiration.rawText)}</blockquote>
-    <div class="inspiration-meta"><span>${escapeHtml([inspiration.brand, inspiration.vehicleModel].filter(Boolean).join(" · ") || "未标注车型")}</span><span>${escapeHtml(inspiration.sourcePlatform || "手动记录")}</span><span>${new Date(inspiration.createdAt).toLocaleString("zh-CN", { hour12: false })}</span></div>
+    <div class="inspiration-meta"><span>${escapeHtml([inspiration.brand, inspiration.vehicleModel].filter(Boolean).join(" · ") || "未标注车型")}</span><span>${escapeHtml([SOURCE_LABELS[inspiration.sourceType] || '手动记录',inspiration.sourcePlatform].filter(Boolean).join(' · '))}</span><span>${escapeHtml(displayShanghai(inspiration.createdAt))}</span></div>
     ${inspiration.tags?.length ? `<div class="tag-list">${inspiration.tags.map((tag) => `<span># ${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
   </article>`;
 }

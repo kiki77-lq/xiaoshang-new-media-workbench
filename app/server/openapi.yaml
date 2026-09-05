@@ -1426,7 +1426,7 @@ components:
         type: string
         minLength: 1
         maxLength: 200
-      description: Repeating the same key and request replays the first response.
+      description: Ordinary business POST responses replay with the same key and body for 24 hours. After expiry or uncertain request time, query existing state before retrying; an expired key can create again. Backup/restore use persistent external receipts instead. PATCH uses version conflicts, not POST-style replay.
   schemas:
     ReportInput:
       type: object

@@ -17,8 +17,8 @@
   .mobile-menu { display: inline-grid; flex: 0 0 auto; }
   .global-search { width: auto; min-width: 0; flex: 1; height: 42px; }
   .global-search small { display: none; }
-  .topbar > .btn { width: 42px; min-width: 42px; padding: 0; overflow: hidden; color: transparent; }
-  .topbar > .btn::first-letter { color: #001116; }
+  .topbar > .btn { width: 42px; min-width: 42px; height: 42px; padding: 0; overflow: hidden; font-size: 0; display: grid; place-items: center; }
+  .topbar > .btn::before { content: '＋'; color: #001116; font-size: 20px; line-height: 1; }
   .topbar > .btn .future-tag { display: none; }
   #page-outlet { padding: 16px 14px calc(28px + env(safe-area-inset-bottom)); }
   .page-header { min-height: 62px; margin-bottom: 18px; display: block; }
