@@ -1,11 +1,140 @@
 openapi: 3.1.0
 info:
   title: Xiaoshang New Media Workbench Local API
-  version: 0.4.0
-  description: PHASE 4 local API. SQLite is the sole business source. All dates are normalized to UTC ISO8601; UI uses Asia/Shanghai. No business fixtures are created at startup.
+  version: 0.5.0
+  description: PHASE 5 local API. SQLite is the sole business source. Timestamps use UTC ISO8601; metric periods are inclusive Shanghai calendar dates. No business fixtures are created at startup.
 servers:
   - url: http://127.0.0.1:5173/api/v1
 paths:
+  /ingestion:
+    get:
+      operationId: listIngestionRuns
+      description: Latest 100 persisted runs, newest first. Parse failures have row=0 and no parsed rows; row errors
+        use one-based record positions (tabular header counts as row 1).
+      parameters: []
+      responses:
+        "200":
+          description: Latest 100 persisted runs, newest first. Parse failures have row=0 and no parsed rows; row errors
+            use one-based record positions (tabular header counts as row 1).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionListEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+    post:
+      operationId: createIngestion
+      summary: Import manual, CSV, Excel or WorkBuddy-compatible observations
+      description: Synchronous idempotency transaction with per-row savepoints. Successful rows survive other row
+        errors; any overall transaction/audit failure rolls everything back. All valid import envelopes return
+        201 including persisted failed/partial_failure runs; invalid envelope returns 400. Same key/body
+        replays; changed body conflicts.
+      security:
+        - bearerAuth: []
+        - sameOrigin: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestionInput"
+      responses:
+        "201":
+          description: Persisted run or idempotent replay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/OriginForbidden"
+        "409":
+          description: "IDEMPOTENCY_KEY_REUSED: same key used with a different request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "413":
+          description: Request exceeds configured body limit
+  /ingestion/mapping:
+    get:
+      operationId: getIngestionMapping
+      description: Chinese/English default mapping and 13 canonical metric definitions.
+      parameters: []
+      responses:
+        "200":
+          description: Chinese/English default mapping and 13 canonical metric definitions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionMappingEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+  /analytics/overview:
+    get:
+      operationId: getAnalyticsOverview
+      description: Shanghai monthly summary. Latest exact entity/period by capturedAt then import order; widest
+        non-overlapping intervals. Cross-month ranges excluded without prorating. Prefer account scope per
+        platform, otherwise known publication subtotal. Missing values stay null, inferred metrics excluded; net
+        followers derive only from paired factual inputs in one snapshot. Ranking sums content across platforms.
+        Trends contain selected single-day observations only and explicit derived evidence; no fabricated daily
+        deltas. contentCount uses created_at in Shanghai month. Warnings/calculationNote are Chinese
+        user-readable.
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}$
+          description: YYYY-MM, defaults to current Shanghai month.
+      responses:
+        "200":
+          description: Shanghai monthly summary. Latest exact entity/period by capturedAt then import order; widest
+            non-overlapping intervals. Cross-month ranges excluded without prorating. Prefer account scope per
+            platform, otherwise known publication subtotal. Missing values stay null, inferred metrics excluded;
+            net followers derive only from paired factual inputs in one snapshot. Ranking sums content across
+            platforms. Trends contain selected single-day observations only and explicit derived evidence; no
+            fabricated daily deltas. contentCount uses created_at in Shanghai month. Warnings/calculationNote
+            are Chinese user-readable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsOverviewEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+  /contents/{id}/review:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      operationId: getContentMetricReview
+      description: Persisted exact-period latest metrics/series and matching review findings; AI inference remains
+        independently labelled.
+      parameters:
+        - name: platformCode
+          in: query
+          schema:
+            type: string
+            enum:
+              - douyin
+              - wechat_channels
+              - xiaohongshu
+              - weibo
+      responses:
+        "200":
+          description: Review observations and findings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentReviewResultEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /contents/{id}/publications/{platformCode}:
     parameters:
       - $ref: '#/components/parameters/ResourceId'
@@ -478,6 +607,1554 @@ components:
         maxLength: 200
       description: Repeating the same key and request replays the first response.
   schemas:
+    MetricEvidenceInput:
+      type: object
+      additionalProperties: false
+      required:
+        - value
+      properties:
+        value:
+          oneOf:
+            - type: number
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: string
+              maxLength: 100
+          description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+            Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+        evidenceLevel:
+          type: string
+          enum:
+            - observed
+            - derived
+            - inferred
+          default: observed
+        calculationNote:
+          type:
+            - string
+            - "null"
+          maxLength: 5000
+        evidence:
+          oneOf:
+            - type: "null"
+            - type: string
+              minLength: 1
+              maxLength: 20000
+            - type: number
+            - type: array
+              minItems: 1
+            - type: object
+              minProperties: 1
+          description: Nonempty JSON references/values, serialized max 20000 characters; no nested empty values.
+            Derived/inferred require non-null evidence.
+      allOf:
+        - if:
+            required:
+              - evidenceLevel
+            properties:
+              evidenceLevel:
+                enum:
+                  - derived
+                  - inferred
+          then:
+            required:
+              - calculationNote
+              - evidence
+            properties:
+              calculationNote:
+                type: string
+                minLength: 1
+                maxLength: 5000
+              evidence:
+                not:
+                  type: "null"
+    MetricSeriesInput:
+      type: object
+      additionalProperties: false
+      required:
+        - seriesKey
+        - position
+        - label
+        - value
+        - unit
+      properties:
+        seriesKey:
+          type: string
+          enum:
+            - traffic_lifecycle
+            - retention
+            - engagement_timeline
+            - traffic_source
+        position:
+          type: number
+          minimum: 0
+          maximum: 9007199254740991
+        label:
+          type: string
+          minLength: 1
+          maxLength: 240
+        value:
+          oneOf:
+            - type: number
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: string
+              maxLength: 100
+          description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+            Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+        unit:
+          type: string
+          enum:
+            - count
+            - ratio
+            - seconds
+        evidenceLevel:
+          type: string
+          enum:
+            - observed
+            - derived
+            - inferred
+          default: observed
+        calculationNote:
+          type:
+            - string
+            - "null"
+          maxLength: 5000
+        evidence:
+          oneOf:
+            - type: "null"
+            - type: string
+              minLength: 1
+              maxLength: 20000
+            - type: number
+            - type: array
+              minItems: 1
+            - type: object
+              minProperties: 1
+          description: Nonempty JSON references/values, serialized max 20000 characters; no nested empty values.
+            Derived/inferred require non-null evidence.
+      allOf:
+        - if:
+            required:
+              - evidenceLevel
+            properties:
+              evidenceLevel:
+                enum:
+                  - derived
+                  - inferred
+          then:
+            required:
+              - calculationNote
+              - evidence
+            properties:
+              calculationNote:
+                type: string
+                minLength: 1
+                maxLength: 5000
+              evidence:
+                not:
+                  type: "null"
+      description: Retention values use ratio; traffic_lifecycle and engagement_timeline count; traffic_source count
+        or ratio. Same seriesKey must use a single unit and unique positions. Content rows only.
+    ReviewFindingInput:
+      type: object
+      additionalProperties: false
+      required:
+        - findingType
+        - title
+        - body
+      properties:
+        findingType:
+          type: string
+          enum:
+            - strength
+            - issue
+            - recommendation
+            - high_engagement_segment
+        title:
+          type: string
+          minLength: 1
+          maxLength: 240
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        evidenceLevel:
+          type: string
+          enum:
+            - observed
+            - derived
+            - inferred
+          default: observed
+        calculationNote:
+          type:
+            - string
+            - "null"
+          maxLength: 5000
+        evidence:
+          oneOf:
+            - type: "null"
+            - type: string
+              minLength: 1
+              maxLength: 20000
+            - type: number
+            - type: array
+              minItems: 1
+            - type: object
+              minProperties: 1
+          description: Nonempty JSON references/values, serialized max 20000 characters; no nested empty values.
+            Derived/inferred require non-null evidence.
+      allOf:
+        - if:
+            required:
+              - evidenceLevel
+            properties:
+              evidenceLevel:
+                enum:
+                  - derived
+                  - inferred
+          then:
+            required:
+              - calculationNote
+              - evidence
+            properties:
+              calculationNote:
+                type: string
+                minLength: 1
+                maxLength: 5000
+              evidence:
+                not:
+                  type: "null"
+    ReviewInput:
+      type: object
+      additionalProperties: false
+      required:
+        - summary
+        - dataQuality
+        - generatedBy
+        - findings
+      properties:
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        dataQuality:
+          type: string
+          enum:
+            - complete
+            - partial
+            - proxy_based
+        generatedBy:
+          type: string
+          enum:
+            - human
+            - workbuddy
+            - ai
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewFindingInput"
+          maxItems: 100
+    IngestionRow:
+      type: object
+      additionalProperties: false
+      required:
+        - platformCode
+      properties:
+        platformCode:
+          type: string
+          enum:
+            - douyin
+            - wechat_channels
+            - xiaohongshu
+            - weibo
+        contentId:
+          type:
+            - string
+            - "null"
+          maxLength: 240
+        sourceReference:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        capturedAt:
+          type: string
+          format: date-time
+        notes:
+          type:
+            - string
+            - "null"
+          maxLength: 5000
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        metrics:
+          type: object
+          additionalProperties: false
+          required: []
+          properties:
+            views:
+              oneOf:
+                - oneOf:
+                    - type: number
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: string
+                      maxLength: 100
+                  description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                    Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+                - $ref: "#/components/schemas/MetricEvidenceInput"
+                - type: "null"
+            likes:
+              oneOf:
+                - oneOf:
+                    - type: number
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: string
+                      maxLength: 100
+                  description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                    Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+                - $ref: "#/components/schemas/MetricEvidenceInput"
+                - type: "null"
+            comments:
+              oneOf:
+                - oneOf:
+                    - type: number
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: string
+                      maxLength: 100
+                  description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                    Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+                - $ref: "#/components/schemas/MetricEvidenceInput"
+                - type: "null"
+            shares:
+              oneOf:
+                - oneOf:
+                    - type: number
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: string
+                      maxLength: 100
+                  description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                    Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+                - $ref: "#/components/schemas/MetricEvidenceInput"
+                - type: "null"
+            saves:
+              oneOf:
+                - oneOf:
+                    - type: number
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: string
+                      maxLength: 100
+                  description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                    Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+                - $ref: "#/components/schemas/MetricEvidenceInput"
+                - type: "null"
+            followers_total:
+              oneOf:
+                - oneOf:
+                    - type: number
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: string
+                      maxLength: 100
+                  description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                    Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+                - $ref: "#/components/schemas/MetricEvidenceInput"
+                - type: "null"
+            followers_gained:
+              oneOf:
+                - oneOf:
+                    - type: number
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: string
+                      maxLength: 100
+                  description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                    Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+                - $ref: "#/components/schemas/MetricEvidenceInput"
+                - type: "null"
+            followers_lost:
+              oneOf:
+                - oneOf:
+                    - type: number
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: string
+                      maxLength: 100
+                  description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                    Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+                - $ref: "#/components/schemas/MetricEvidenceInput"
+                - type: "null"
+            net_followers:
+              oneOf:
+                - oneOf:
+                    - type: number
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: string
+                      maxLength: 100
+                  description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                    Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+                - $ref: "#/components/schemas/MetricEvidenceInput"
+                - type: "null"
+            completion_rate:
+              oneOf:
+                - oneOf:
+                    - type: number
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: string
+                      maxLength: 100
+                  description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                    Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+                - $ref: "#/components/schemas/MetricEvidenceInput"
+                - type: "null"
+            two_second_bounce_rate:
+              oneOf:
+                - oneOf:
+                    - type: number
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: string
+                      maxLength: 100
+                  description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                    Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+                - $ref: "#/components/schemas/MetricEvidenceInput"
+                - type: "null"
+            five_second_retention_rate:
+              oneOf:
+                - oneOf:
+                    - type: number
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: string
+                      maxLength: 100
+                  description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                    Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+                - $ref: "#/components/schemas/MetricEvidenceInput"
+                - type: "null"
+            average_watch_seconds:
+              oneOf:
+                - oneOf:
+                    - type: number
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: string
+                      maxLength: 100
+                  description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                    Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+                - $ref: "#/components/schemas/MetricEvidenceInput"
+                - type: "null"
+        series:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricSeriesInput"
+          maxItems: 1000
+        review:
+          $ref: "#/components/schemas/ReviewInput"
+        views:
+          oneOf:
+            - oneOf:
+                - type: number
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: string
+                  maxLength: 100
+              description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+            - $ref: "#/components/schemas/MetricEvidenceInput"
+            - type: "null"
+        likes:
+          oneOf:
+            - oneOf:
+                - type: number
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: string
+                  maxLength: 100
+              description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+            - $ref: "#/components/schemas/MetricEvidenceInput"
+            - type: "null"
+        comments:
+          oneOf:
+            - oneOf:
+                - type: number
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: string
+                  maxLength: 100
+              description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+            - $ref: "#/components/schemas/MetricEvidenceInput"
+            - type: "null"
+        shares:
+          oneOf:
+            - oneOf:
+                - type: number
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: string
+                  maxLength: 100
+              description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+            - $ref: "#/components/schemas/MetricEvidenceInput"
+            - type: "null"
+        saves:
+          oneOf:
+            - oneOf:
+                - type: number
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: string
+                  maxLength: 100
+              description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+            - $ref: "#/components/schemas/MetricEvidenceInput"
+            - type: "null"
+        followers_total:
+          oneOf:
+            - oneOf:
+                - type: number
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: string
+                  maxLength: 100
+              description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+            - $ref: "#/components/schemas/MetricEvidenceInput"
+            - type: "null"
+        followers_gained:
+          oneOf:
+            - oneOf:
+                - type: number
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: string
+                  maxLength: 100
+              description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+            - $ref: "#/components/schemas/MetricEvidenceInput"
+            - type: "null"
+        followers_lost:
+          oneOf:
+            - oneOf:
+                - type: number
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: string
+                  maxLength: 100
+              description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+            - $ref: "#/components/schemas/MetricEvidenceInput"
+            - type: "null"
+        net_followers:
+          oneOf:
+            - oneOf:
+                - type: number
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: string
+                  maxLength: 100
+              description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+            - $ref: "#/components/schemas/MetricEvidenceInput"
+            - type: "null"
+        completion_rate:
+          oneOf:
+            - oneOf:
+                - type: number
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: string
+                  maxLength: 100
+              description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+            - $ref: "#/components/schemas/MetricEvidenceInput"
+            - type: "null"
+        two_second_bounce_rate:
+          oneOf:
+            - oneOf:
+                - type: number
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: string
+                  maxLength: 100
+              description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+            - $ref: "#/components/schemas/MetricEvidenceInput"
+            - type: "null"
+        five_second_retention_rate:
+          oneOf:
+            - oneOf:
+                - type: number
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: string
+                  maxLength: 100
+              description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+            - $ref: "#/components/schemas/MetricEvidenceInput"
+            - type: "null"
+        average_watch_seconds:
+          oneOf:
+            - oneOf:
+                - type: number
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: string
+                  maxLength: 100
+              description: Counts exact integers (negative only net_followers); ratios 0..1 or percent strings; seconds >=0.
+                Grouped comma, 万, 亿 display values accepted for counts. Null/blank scalar metrics omitted.
+            - $ref: "#/components/schemas/MetricEvidenceInput"
+            - type: "null"
+      description: Account observation when contentId omitted/null. Content must already exist and have the platform
+        publication. At least one metric, series point or review required. No duplicate flat/nested metric key.
+        Explicit null enums/dates rejected.
+    IngestionDefaults:
+      type: object
+      additionalProperties: false
+      required: []
+      properties:
+        platformCode:
+          type: string
+          enum:
+            - douyin
+            - wechat_channels
+            - xiaohongshu
+            - weibo
+        contentId:
+          type:
+            - string
+            - "null"
+          maxLength: 240
+      description: CSV/Excel only. Fill missing/blank platformCode/contentId cells. Explicit nonblank row cells
+        override defaults; omit contentId for account data.
+    IngestionInput:
+      type: object
+      additionalProperties: false
+      required:
+        - sourceType
+        - sourceName
+        - periodStart
+        - periodEnd
+      properties:
+        sourceType:
+          type: string
+          enum:
+            - manual
+            - csv
+            - excel
+            - workbuddy
+        sourceName:
+          type: string
+          minLength: 1
+          maxLength: 240
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        mapping:
+          type: object
+          maxProperties: 64
+          additionalProperties:
+            type: string
+            enum:
+              - platformCode
+              - contentId
+              - sourceReference
+              - capturedAt
+              - notes
+              - periodStart
+              - periodEnd
+              - metrics
+              - series
+              - review
+              - views
+              - likes
+              - comments
+              - shares
+              - saves
+              - followers_total
+              - followers_gained
+              - followers_lost
+              - net_followers
+              - completion_rate
+              - two_second_bounce_rate
+              - five_second_retention_rate
+              - average_watch_seconds
+          description: Header to canonical row field; overrides default Chinese/English mapping. Unknown or duplicate
+            mapped columns reject the parse.
+        defaults:
+          $ref: "#/components/schemas/IngestionDefaults"
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/IngestionRow"
+          maxItems: 1000
+          minItems: 1
+        csvText:
+          type: string
+          minLength: 1
+          maxLength: 1048576
+        fileBase64:
+          type: string
+          minLength: 1
+          maxLength: 1398104
+          contentEncoding: base64
+      oneOf:
+        - properties:
+            sourceType:
+              enum:
+                - manual
+                - workbuddy
+          required:
+            - rows
+          not:
+            anyOf:
+              - required:
+                  - csvText
+              - required:
+                  - fileBase64
+              - required:
+                  - mapping
+              - required:
+                  - defaults
+        - properties:
+            sourceType:
+              const: csv
+          required:
+            - csvText
+          not:
+            anyOf:
+              - required:
+                  - rows
+              - required:
+                  - fileBase64
+        - properties:
+            sourceType:
+              const: excel
+          required:
+            - fileBase64
+          not:
+            anyOf:
+              - required:
+                  - rows
+              - required:
+                  - csvText
+      description: Inclusive Shanghai dates, valid 1900..9998; start <= end. official_api reserved but unavailable.
+        1 MiB CSV or decoded Excel; request-body default 2 MiB. XLSX and XLS, first sheet only; 1000 data rows, 64
+        columns, 64064 cells, 16 MiB expanded ZIP and 256 entries. Formula/error cells rejected per row. CSV/Excel
+        metrics/series/review cells may contain JSON strings. Structural parse failure persists failed run with
+        row=0; row validation failure rolls back only its row.
+    IngestionRun:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - sourceType
+        - sourceName
+        - periodStart
+        - periodEnd
+        - status
+        - rowsTotal
+        - rowsImported
+        - rowsRejected
+        - errors
+        - startedAt
+        - completedAt
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 240
+        sourceType:
+          type: string
+          enum:
+            - manual
+            - csv
+            - excel
+            - workbuddy
+        sourceName:
+          type: string
+          minLength: 1
+          maxLength: 240
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        status:
+          type: string
+          enum:
+            - received
+            - validated
+            - imported
+            - partial_failure
+            - failed
+        rowsTotal:
+          type: integer
+          minimum: 0
+        rowsImported:
+          type: integer
+          minimum: 0
+        rowsRejected:
+          type: integer
+          minimum: 0
+        errors:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - row
+              - message
+            properties:
+              row:
+                type: integer
+                minimum: 0
+              message:
+                type: string
+                minLength: 1
+                maxLength: 500
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    MetricValue:
+      type: object
+      additionalProperties: false
+      required:
+        - value
+        - unit
+        - evidenceLevel
+        - calculationNote
+        - evidence
+      properties:
+        value:
+          type: number
+        unit:
+          type: string
+          enum:
+            - count
+            - ratio
+            - seconds
+        evidenceLevel:
+          type: string
+          enum:
+            - observed
+            - derived
+            - inferred
+          default: observed
+        calculationNote:
+          type:
+            - string
+            - "null"
+          maxLength: 5000
+        evidence:
+          oneOf:
+            - type: "null"
+            - type: string
+              minLength: 1
+              maxLength: 20000
+            - type: number
+            - type: array
+              minItems: 1
+            - type: object
+              minProperties: 1
+          description: Nonempty JSON references/values, serialized max 20000 characters; no nested empty values.
+            Derived/inferred require non-null evidence.
+    MetricSeriesPoint:
+      type: object
+      additionalProperties: false
+      required:
+        - seriesKey
+        - position
+        - label
+        - value
+        - unit
+        - evidenceLevel
+        - calculationNote
+        - evidence
+      properties:
+        seriesKey:
+          type: string
+          enum:
+            - traffic_lifecycle
+            - retention
+            - engagement_timeline
+            - traffic_source
+        position:
+          type: number
+          minimum: 0
+          maximum: 9007199254740991
+        label:
+          type: string
+          minLength: 1
+          maxLength: 240
+        value:
+          type: number
+        unit:
+          type: string
+          enum:
+            - count
+            - ratio
+            - seconds
+        evidenceLevel:
+          type: string
+          enum:
+            - observed
+            - derived
+            - inferred
+          default: observed
+        calculationNote:
+          type:
+            - string
+            - "null"
+          maxLength: 5000
+        evidence:
+          oneOf:
+            - type: "null"
+            - type: string
+              minLength: 1
+              maxLength: 20000
+            - type: number
+            - type: array
+              minItems: 1
+            - type: object
+              minProperties: 1
+          description: Nonempty JSON references/values, serialized max 20000 characters; no nested empty values.
+            Derived/inferred require non-null evidence.
+    MetricSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - platformCode
+        - platformName
+        - periodStart
+        - periodEnd
+        - sourceType
+        - sourceName
+        - sourceReference
+        - capturedAt
+        - notes
+        - metrics
+        - series
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 240
+        platformCode:
+          type: string
+          enum:
+            - douyin
+            - wechat_channels
+            - xiaohongshu
+            - weibo
+        platformName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        sourceType:
+          type: string
+          minLength: 1
+          maxLength: 80
+        sourceName:
+          type: string
+          minLength: 1
+          maxLength: 240
+        sourceReference:
+          type:
+            - string
+            - "null"
+        capturedAt:
+          type: string
+          format: date-time
+        notes:
+          type:
+            - string
+            - "null"
+        metrics:
+          type: object
+          additionalProperties: false
+          required: []
+          properties:
+            views:
+              $ref: "#/components/schemas/MetricValue"
+            likes:
+              $ref: "#/components/schemas/MetricValue"
+            comments:
+              $ref: "#/components/schemas/MetricValue"
+            shares:
+              $ref: "#/components/schemas/MetricValue"
+            saves:
+              $ref: "#/components/schemas/MetricValue"
+            followers_total:
+              $ref: "#/components/schemas/MetricValue"
+            followers_gained:
+              $ref: "#/components/schemas/MetricValue"
+            followers_lost:
+              $ref: "#/components/schemas/MetricValue"
+            net_followers:
+              $ref: "#/components/schemas/MetricValue"
+            completion_rate:
+              $ref: "#/components/schemas/MetricValue"
+            two_second_bounce_rate:
+              $ref: "#/components/schemas/MetricValue"
+            five_second_retention_rate:
+              $ref: "#/components/schemas/MetricValue"
+            average_watch_seconds:
+              $ref: "#/components/schemas/MetricValue"
+        series:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricSeriesPoint"
+    ReviewFinding:
+      type: object
+      additionalProperties: false
+      required:
+        - findingType
+        - title
+        - body
+        - evidenceLevel
+        - calculationNote
+        - evidence
+      properties:
+        findingType:
+          type: string
+          enum:
+            - strength
+            - issue
+            - recommendation
+            - high_engagement_segment
+        title:
+          type: string
+          minLength: 1
+          maxLength: 240
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        evidenceLevel:
+          type: string
+          enum:
+            - observed
+            - derived
+            - inferred
+          default: observed
+        calculationNote:
+          type:
+            - string
+            - "null"
+          maxLength: 5000
+        evidence:
+          oneOf:
+            - type: "null"
+            - type: string
+              minLength: 1
+              maxLength: 20000
+            - type: number
+            - type: array
+              minItems: 1
+            - type: object
+              minProperties: 1
+          description: Nonempty JSON references/values, serialized max 20000 characters; no nested empty values.
+            Derived/inferred require non-null evidence.
+    ContentMetricReview:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - snapshotId
+        - platformCode
+        - summary
+        - dataQuality
+        - generatedBy
+        - generatedAt
+        - periodStart
+        - periodEnd
+        - findings
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 240
+        snapshotId:
+          type: string
+          minLength: 1
+          maxLength: 240
+        platformCode:
+          type: string
+          enum:
+            - douyin
+            - wechat_channels
+            - xiaohongshu
+            - weibo
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        dataQuality:
+          type: string
+          enum:
+            - complete
+            - partial
+            - proxy_based
+        generatedBy:
+          type: string
+          enum:
+            - human
+            - workbuddy
+            - ai
+        generatedAt:
+          type: string
+          format: date-time
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewFinding"
+    ContentReviewResult:
+      type: object
+      additionalProperties: false
+      required:
+        - content
+        - snapshots
+        - reviews
+        - updatedAt
+        - dataQuality
+        - warnings
+      properties:
+        content:
+          type: object
+          additionalProperties: false
+          required:
+            - id
+            - title
+          properties:
+            id:
+              type: string
+              minLength: 1
+              maxLength: 240
+            title:
+              type: string
+              minLength: 1
+              maxLength: 240
+        snapshots:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricSnapshot"
+        reviews:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentMetricReview"
+        updatedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        dataQuality:
+          type: string
+          enum:
+            - complete
+            - partial
+            - proxy_based
+        warnings:
+          type: array
+          items:
+            type: string
+      description: Latest exact entity/period snapshots only, sorted by capture then import order. Reviews join
+        exact snapshot IDs, never superseded reviews. Data quality reflects missing metrics/series, inferred
+        metric values or explicit proxy_based review quality; inferred recommendations alone do not mark observed
+        metrics proxy-based.
+    TrendPoint:
+      type: object
+      additionalProperties: false
+      required:
+        - label
+        - value
+        - evidenceLevel
+        - calculationNote
+        - evidence
+      properties:
+        label:
+          type: string
+          format: date
+        value:
+          type: number
+        evidenceLevel:
+          type: string
+          const: derived
+        calculationNote:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        evidence:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - snapshotId
+              - metricKey
+              - inputMetricKeys
+            properties:
+              snapshotId:
+                type: string
+                minLength: 1
+                maxLength: 240
+              metricKey:
+                type: string
+                enum:
+                  - views
+                  - likes
+                  - comments
+                  - shares
+                  - saves
+                  - followers_total
+                  - followers_gained
+                  - followers_lost
+                  - net_followers
+                  - completion_rate
+                  - two_second_bounce_rate
+                  - five_second_retention_rate
+                  - average_watch_seconds
+              inputMetricKeys:
+                type: array
+                items:
+                  type: string
+                  enum:
+                    - views
+                    - likes
+                    - comments
+                    - shares
+                    - saves
+                    - followers_total
+                    - followers_gained
+                    - followers_lost
+                    - net_followers
+                    - completion_rate
+                    - two_second_bounce_rate
+                    - five_second_retention_rate
+                    - average_watch_seconds
+    AnalyticsOverview:
+      type: object
+      additionalProperties: false
+      required:
+        - periodStart
+        - periodEnd
+        - kpis
+        - platforms
+        - ranking
+        - trends
+        - updatedAt
+        - dataQuality
+        - warnings
+        - calculationNote
+      properties:
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        kpis:
+          type: object
+          additionalProperties: false
+          required:
+            - views
+            - contentCount
+            - bestContent
+            - netFollowers
+          properties:
+            views:
+              type:
+                - number
+                - "null"
+            contentCount:
+              type: integer
+              minimum: 0
+            bestContent:
+              oneOf:
+                - type: "null"
+                - type: object
+                  additionalProperties: false
+                  required:
+                    - id
+                    - title
+                    - views
+                  properties:
+                    id:
+                      type: string
+                      minLength: 1
+                      maxLength: 240
+                    title:
+                      type: string
+                      minLength: 1
+                      maxLength: 240
+                    views:
+                      type: number
+            netFollowers:
+              type:
+                - number
+                - "null"
+        platforms:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - code
+              - name
+              - views
+              - likes
+              - comments
+              - netFollowers
+              - dataQuality
+            properties:
+              code:
+                type: string
+                enum:
+                  - douyin
+                  - wechat_channels
+                  - xiaohongshu
+                  - weibo
+              name:
+                type: string
+                minLength: 1
+                maxLength: 80
+              views:
+                type:
+                  - number
+                  - "null"
+              likes:
+                type:
+                  - number
+                  - "null"
+              comments:
+                type:
+                  - number
+                  - "null"
+              netFollowers:
+                type:
+                  - number
+                  - "null"
+              dataQuality:
+                type: string
+                enum:
+                  - complete
+                  - partial
+                  - proxy_based
+        ranking:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - contentId
+              - title
+              - views
+            properties:
+              contentId:
+                type: string
+                minLength: 1
+                maxLength: 240
+              title:
+                type: string
+                minLength: 1
+                maxLength: 240
+              views:
+                type: number
+              platformCode:
+                type: string
+                enum:
+                  - douyin
+                  - wechat_channels
+                  - xiaohongshu
+                  - weibo
+        trends:
+          type: object
+          additionalProperties: false
+          required:
+            - views
+            - likes
+            - comments
+            - netFollowers
+          properties:
+            views:
+              type: array
+              items:
+                $ref: "#/components/schemas/TrendPoint"
+            likes:
+              type: array
+              items:
+                $ref: "#/components/schemas/TrendPoint"
+            comments:
+              type: array
+              items:
+                $ref: "#/components/schemas/TrendPoint"
+            netFollowers:
+              type: array
+              items:
+                $ref: "#/components/schemas/TrendPoint"
+        updatedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        dataQuality:
+          type: string
+          enum:
+            - complete
+            - partial
+            - proxy_based
+        warnings:
+          type: array
+          items:
+            type: string
+        calculationNote:
+          type: string
+          minLength: 1
+          maxLength: 5000
+    IngestionMapping:
+      type: object
+      additionalProperties: false
+      required:
+        - mapping
+        - metrics
+      properties:
+        mapping:
+          type: object
+          additionalProperties:
+            type: string
+        metrics:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - key
+              - label
+              - unit
+            properties:
+              key:
+                type: string
+                enum:
+                  - views
+                  - likes
+                  - comments
+                  - shares
+                  - saves
+                  - followers_total
+                  - followers_gained
+                  - followers_lost
+                  - net_followers
+                  - completion_rate
+                  - two_second_bounce_rate
+                  - five_second_retention_rate
+                  - average_watch_seconds
+              label:
+                type: string
+                minLength: 1
+                maxLength: 80
+              unit:
+                type: string
+                enum:
+                  - count
+                  - ratio
+                  - seconds
+    IngestionEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/IngestionRun"
+        meta:
+          $ref: "#/components/schemas/RequestMeta"
+    AnalyticsOverviewEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/AnalyticsOverview"
+        meta:
+          $ref: "#/components/schemas/RequestMeta"
+    ContentReviewResultEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/ContentReviewResult"
+        meta:
+          $ref: "#/components/schemas/RequestMeta"
+    IngestionMappingEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/IngestionMapping"
+        meta:
+          $ref: "#/components/schemas/RequestMeta"
+    IngestionListEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/IngestionRun"
+              maxItems: 100
+        meta:
+          $ref: "#/components/schemas/RequestMeta"
     CalendarEventType:
       type: string
       enum: [shoot, publish, pending_confirmation]

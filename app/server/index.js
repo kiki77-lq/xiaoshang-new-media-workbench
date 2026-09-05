@@ -20,6 +20,7 @@ import { createRouter } from "./http/router.js";
 import { registerContentRoutes } from "./routes/contents.js";
 import { registerDashboardRoutes } from "./routes/dashboard.js";
 import { registerInspirationRoutes } from "./routes/inspirations.js";
+import { registerAnalyticsRoutes } from "./routes/analytics.js";
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -103,6 +104,7 @@ function buildRouter(config, db) {
   registerContentRoutes(router, { config, db });
   registerDashboardRoutes(router, { config, db });
   registerCalendarRoutes(router, { config, db });
+  registerAnalyticsRoutes(router, { config, db });
 
   router.add("GET", "/api/v1/health", async (_req, res, context) => {
     sendData(res, 200, {

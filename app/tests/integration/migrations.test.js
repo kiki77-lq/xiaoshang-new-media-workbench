@@ -14,20 +14,26 @@ const EXPECTED_TABLES = [
   "audit_log",
   "content_inspirations",
   "content_publications",
+  "content_reviews",
   "content_tags",
   "contents",
   "idempotency_keys",
+  "ingestion_runs",
   "inspiration_tags",
   "inspirations",
+  "metric_series_points",
+  "metric_snapshots",
+  "metric_values",
   "observation_tags",
   "observations",
   "platform_channels",
+  "review_findings",
   "schedule_events",
   "schema_migrations",
   "tags"
 ];
 
-test("empty database migrates once through schema version 2", (t) => {
+test("empty database migrates once through schema version 3", (t) => {
   const paths = createTempWorkbench(t);
   const db = openDatabase({ dbPath: paths.dbPath });
   t.after(() => db.close());
@@ -40,20 +46,20 @@ test("empty database migrates once through schema version 2", (t) => {
   `).all().map((row) => row.name);
 
   assert.deepEqual(actualTables, EXPECTED_TABLES);
-  assert.deepEqual(first, { fromVersion: 0, toVersion: 2, appliedVersions: [1, 2] });
+  assert.deepEqual(first, { fromVersion: 0, toVersion: 3, appliedVersions: [1, 2, 3] });
   assert.deepEqual(
     db.prepare("SELECT code FROM platform_channels ORDER BY code").all().map((row) => row.code),
     ["douyin", "wechat_channels", "weibo", "xiaohongshu"]
   );
 
   assert.deepEqual(runMigrations(db), {
-    fromVersion: 2,
-    toVersion: 2,
+    fromVersion: 3,
+    toVersion: 3,
     appliedVersions: []
   });
 });
 
-test("schema v1 upgrades additively to v2 and repeats safely", (t) => {
+test("schema v1 upgrades additively through v3 and repeats safely", (t) => {
   const paths = createTempWorkbench(t);
   const v1Dir = path.join(paths.projectRoot, "v1-migrations");
   fs.mkdirSync(v1Dir);
@@ -67,9 +73,9 @@ test("schema v1 upgrades additively to v2 and repeats safely", (t) => {
   db.prepare(`INSERT INTO inspirations(id, raw_text, summary_title, source_type, pinned, status, created_at, updated_at, version)
     VALUES ('existing-v1', '旧原话', '旧标题', 'manual', 0, 'organized', '2026-09-04T00:00:00.000Z', '2026-09-04T00:00:00.000Z', 1)`).run();
 
-  assert.deepEqual(runMigrations(db), { fromVersion: 1, toVersion: 2, appliedVersions: [2] });
+  assert.deepEqual(runMigrations(db), { fromVersion: 1, toVersion: 3, appliedVersions: [2, 3] });
   assert.equal(db.prepare("SELECT summary_title_is_fallback FROM inspirations WHERE id = 'existing-v1'").get().summary_title_is_fallback, 0);
-  assert.deepEqual(runMigrations(db), { fromVersion: 2, toVersion: 2, appliedVersions: [] });
+  assert.deepEqual(runMigrations(db), { fromVersion: 3, toVersion: 3, appliedVersions: [] });
 });
 
 test("database connection enables required safety pragmas", (t) => {

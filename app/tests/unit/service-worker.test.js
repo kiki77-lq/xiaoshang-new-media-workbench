@@ -53,11 +53,12 @@ test("service worker precache never contains an API URL", () => {
   assert.match(source, /fetch\(e\.request\)/);
 });
 
-test("PHASE 4 service worker upgrades the shell cache and removes previous shells", async () => {
+test("service worker upgrades the shell cache and removes previous shells", async () => {
   const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const source = fs.readFileSync(path.join(appDir, "sw.js"), "utf8");
   const listeners = new Map();
   const deleted = [];
+  const current = source.match(/const CACHE = "([^"]+)"/)[1];
   const context = {
     URL,
     Promise,
@@ -67,7 +68,7 @@ test("PHASE 4 service worker upgrades the shell cache and removes previous shell
       clients: { claim: async () => {} }
     },
     caches: {
-      keys: async () => ["xiaoshang-shell-v2", "xiaoshang-shell-v3", "xiaoshang-shell-v4"],
+      keys: async () => ["legacy-shell-v1", "legacy-shell-v2", current],
       delete: async (key) => { deleted.push(key); return true; },
       open: async () => ({ addAll: async () => {} }),
       match: async () => null
@@ -79,5 +80,5 @@ test("PHASE 4 service worker upgrades the shell cache and removes previous shell
   listeners.get("activate")({ waitUntil: (promise) => { activation = promise; } });
   await activation;
 
-  assert.deepEqual(deleted, ["xiaoshang-shell-v2", "xiaoshang-shell-v3"]);
+  assert.deepEqual(deleted, ["legacy-shell-v1", "legacy-shell-v2"]);
 });

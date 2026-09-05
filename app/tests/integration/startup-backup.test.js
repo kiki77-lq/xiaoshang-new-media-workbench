@@ -9,19 +9,19 @@ import { prepareWorkbench } from '../../server/index.js';
 import { verifyBackup } from '../../server/services/backup-service.js';
 import { createTempWorkbench } from '../helpers/temp-workbench.js';
 
-for (const initialVersion of [0,1,2]) test(`startup schema v${initialVersion} verifies pre-migration backup only when pending`,async(t)=>{
+for (const initialVersion of [0,1,2,3]) test(`startup schema v${initialVersion} verifies pre-migration backup only when pending`,async(t)=>{
   const p=createTempWorkbench(t);
   if(initialVersion) {
     const dir=path.join(p.projectRoot,'migrations'); fs.mkdirSync(dir);
-    for (const name of ['001_core.sql','002_inspiration_title_origin.sql'].slice(0,initialVersion)) fs.copyFileSync(new URL(`../../server/db/migrations/${name}`,import.meta.url),path.join(dir,name));
+    for (const name of ['001_core.sql','002_inspiration_title_origin.sql','003_metrics_reviews.sql'].slice(0,initialVersion)) fs.copyFileSync(new URL(`../../server/db/migrations/${name}`,import.meta.url),path.join(dir,name));
     const db=openDatabase({dbPath:p.dbPath}); runMigrations(db,{migrationDir:dir}); db.close();
   }
   const options={projectRoot:p.projectRoot,env:{WORKBENCH_DATA_DIR:p.dataDir,WORKBENCH_GIT_SHA:'b'.repeat(40)}};
   const ready=await prepareWorkbench(options); ready.db.close();
   const dir=path.join(p.dataDir,'backups');
   const manifests=fs.readdirSync(dir).filter(n=>n.endsWith('.json'));
-  assert.equal(manifests.length,initialVersion<2?1:0);
-  if(initialVersion<2) {
+  assert.equal(manifests.length,initialVersion<3?1:0);
+  if(initialVersion<3) {
     const manifestPath=path.join(dir,manifests[0]);
     const manifest={...JSON.parse(fs.readFileSync(manifestPath,'utf8')),manifestPath};
     assert.equal(manifest.reason,'pre-migration');

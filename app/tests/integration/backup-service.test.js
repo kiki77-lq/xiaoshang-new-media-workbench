@@ -41,7 +41,7 @@ test("consistent backup includes SHA-256 manifest and passes integrity check", a
   });
 
   assert.equal(manifest.reason, "pre-update");
-  assert.equal(manifest.schemaVersion, 2);
+  assert.equal(manifest.schemaVersion, 3);
   assert.match(manifest.sha256, /^[0-9a-f]{64}$/);
   assert.equal(fs.existsSync(manifest.sqlitePath), true);
   assert.equal(fs.existsSync(manifest.manifestPath), true);
@@ -49,7 +49,7 @@ test("consistent backup includes SHA-256 manifest and passes integrity check", a
     ok: true,
     hashMatches: true,
     integrity: "ok",
-    schemaVersion: 2
+    schemaVersion: 3
   });
 });
 

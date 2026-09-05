@@ -10,5 +10,5 @@ test("health-check script validates a real running server", async (t) => {
 
   assert.equal(result.status, "ok");
   assert.equal(result.database, "ok");
-  assert.equal(result.schemaVersion, 2);
+  assert.equal(result.schemaVersion, 3);
 });

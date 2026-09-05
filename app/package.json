@@ -18,5 +18,9 @@
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "yaml": "^2.9.0"
+  },
+  "dependencies": {
+    "csv-parse": "7.0.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }

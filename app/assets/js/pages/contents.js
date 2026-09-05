@@ -145,10 +145,11 @@ function openContentDetail(content, controls) {
       <div class="detail-heading"><div><span class="status-badge type-${escapeHtml(content.contentType)}">${escapeHtml(TYPE_LABELS[content.contentType])}</span><h3>${escapeHtml(content.title)}</h3><p>${escapeHtml([content.brand, content.vehicleModel].filter(Boolean).join(" · ") || "未标注品牌车型")}</p></div><span class="status-badge content-${escapeHtml(content.status)}">${escapeHtml(STATUS_LABELS[content.status])}</span></div>
       ${content.summary ? `<section><small>内容摘要</small><p>${escapeHtml(content.summary)}</p></section>` : ""}
       <section><small>四平台发布状态 · 上海时间</small>${publicationGrid(content.publications)}<div class="publication-edit-actions">${content.publications.map(p=>`<button type="button" class="btn btn-secondary" data-edit-publication="${escapeHtml(p.id)}">编辑${escapeHtml(p.platformName)}发布</button>`).join('')}</div></section>
-      <footer class="form-actions"><button class="btn btn-secondary" type="button" data-modal-close>关闭</button><button class="btn btn-primary" type="button" data-detail-edit>编辑内容</button></footer>
+      <footer class="form-actions"><button class="btn btn-secondary" type="button" data-modal-close>关闭</button><a class="btn btn-secondary" href="/analytics?contentId=${encodeURIComponent(content.id)}" data-route data-open-review>作品复盘</a><button class="btn btn-primary" type="button" data-detail-edit>编辑内容</button></footer>
     </article>`
   });
   document.querySelector("[data-detail-edit]")?.addEventListener("click", () => openEditContent(content, controls));
+  document.querySelector('[data-open-review]')?.addEventListener('click', () => closeModal());
   document.querySelectorAll('[data-edit-publication]').forEach(button=>button.addEventListener('click',()=>openPublicationEditor(content,content.publications.find(p=>p.id===button.dataset.editPublication),controls)));
 }
 

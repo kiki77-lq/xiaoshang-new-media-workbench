@@ -6,6 +6,7 @@ import { attachContents } from "./pages/contents.js";
 import { getPage } from "./pages/index.js";
 import { attachInspirations, openCreateInspiration } from "./pages/inspirations.js";
 import { createRouter } from "./router.js";
+import { currentMonth } from './shared/metrics.js';
 
 const appRoot = document.querySelector("#app");
 const state = {
@@ -21,7 +22,8 @@ const state = {
   filters: {
     inspirations: { filter: "all", search: "" },
     contents: { status: "all", contentType: "all", search: "" },
-    calendar: { eventType: 'all' }
+    calendar: { eventType: 'all' },
+    analytics: { month: currentMonth() }
   }
 };
 
@@ -47,6 +49,7 @@ function pageEndpoint(name) {
   if (name === "home") return "/dashboard";
   if (name === "inspirations") return `/inspirations${queryForPage(name)}`;
   if (name === "contents") return `/contents${queryForPage(name)}`;
+  if (name === 'analytics') return `/analytics/overview?month=${encodeURIComponent(state.filters.analytics.month)}`;
   if (name === 'calendar') {
     const query = new URLSearchParams(calendarRange(state.calendarDate));
     if (state.filters.calendar.eventType !== 'all') query.set('eventType', state.filters.calendar.eventType);
@@ -57,6 +60,10 @@ function pageEndpoint(name) {
 
 function coreControls(name) {
   const reload = () => loadPage(state.activeRoute, { showLoading: false });
+  if (name === 'analytics') return {
+    api, data: state.pageData.analytics, reload, month: state.filters.analytics.month,
+    setMonth(month) { state.filters.analytics.month = month; loadPage(state.activeRoute); }
+  };
   if (name === 'calendar') return {
     api, data: state.pageData.calendar, reload,
     setFilters(filters) { state.filters.calendar = filters; loadPage(state.activeRoute); },
@@ -105,7 +112,7 @@ function renderPage(route) {
   });
   document.title = `${page.title}｜小商的拍车日记`;
   if (route.name === "calendar") attachCalendar(outlet, coreControls('calendar'));
-  if (route.name === "analytics") attachAnalytics(outlet);
+  if (route.name === "analytics") attachAnalytics(outlet, coreControls('analytics'));
   if (route.name === "inspirations") attachInspirations(outlet, coreControls("inspirations"));
   if (route.name === "contents") attachContents(outlet, coreControls("contents"));
 }
@@ -120,7 +127,7 @@ async function loadPage(route, { showLoading = true } = {}) {
     renderPage(route);
   }
   try {
-    const [result, contentResult] = await Promise.all([api.get(endpoint), route.name === 'calendar' ? api.get('/contents') : Promise.resolve(null)]);
+    const [result, contentResult] = await Promise.all([api.get(endpoint), ['calendar','analytics'].includes(route.name) ? api.get('/contents') : Promise.resolve(null)]);
     if (sequence !== state.requestSequence || state.activeRoute?.name !== route.name) return;
     state.pageData[route.name] = contentResult ? { ...result.data, contents: contentResult.data.items } : result.data;
     state.pageErrors[route.name] = null;
