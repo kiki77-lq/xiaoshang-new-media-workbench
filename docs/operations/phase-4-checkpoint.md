@@ -57,3 +57,25 @@ Scope: Task 1 only; direct work on `codex/v1-continuous`; baseline `eddddb12bb0b
 - 001/002 unchanged; no 003. No tracked runtime data and no real runtime data access. Controller's read-only preflight reported root data metadata empty; all implementation tests operated in temporary directories.
 - Full report: `.superpowers/sdd/v1-mission-plan/task-1-report.md` (intentionally ignored orchestration artifact).
 - All phase checks passed before the authorized local commit `feat: build publication calendar workflow`. Keep `codex/v1-continuous` and the workspace for independent controller review; no GitHub writes and no advancement to PHASE 5.
+
+## Independent review minor fix — reject null calendar statuses
+
+- Controller approved core PHASE 4 and requested only this nonnullable-status correction. Default `planned` is now applied only for a create request with status undefined; explicit null on POST/PATCH returns HTTP 400. PATCH omission preserves the existing status.
+- Regression tests capture confirmed event status/version, all event rows, content/publication state, audit count and idempotency count before rejection and assert all remain unchanged. A corrected POST reuses the rejected key successfully; a notes-only PATCH preserves confirmed and increments version once.
+- Scope: local calendar validation only, no shared enum refactor, migration, UI, runner-warning or tall-calendar changes. Tests use existing temporary-data helpers and isolated browser servers; no real data access.
+
+Fresh command evidence (run from `app/`):
+
+1. RED before implementation:
+   `node --disable-warning=ExperimentalWarning --test --test-name-pattern='rejects explicit null status' tests/integration/calendar-api.test.js`
+   Output: `tests 2; pass 0; fail 2`, exit 1. POST assertion `201 !== 400`; PATCH assertion `200 !== 400`.
+2. GREEN after implementation, same command:
+   Output: `tests 2; pass 2; fail 0; skipped 0`, exit 0.
+3. Covering calendar/publication/timezone/OpenAPI suite:
+   `node --disable-warning=ExperimentalWarning --test tests/integration/calendar-api.test.js tests/integration/publication-api.test.js tests/unit/calendar.test.js tests/unit/calendar-colors.test.js tests/unit/shanghai-time.test.js tests/contract/phase4-openapi.test.js`
+   Output: `tests 22; pass 22; fail 0; skipped 0`, exit 0.
+4. `npm test`: output `tests 93; pass 93; fail 0; skipped 0`, exit 0.
+5. `node --check server/services/calendar-service.js && node --check tests/integration/calendar-api.test.js && npm run check && git diff --check`: exit 0.
+6. `npm run test:e2e`: output `10 passed (46.5s)`, exit 0. Fresh real Chromium desktop 1440×900/mobile 390×844 suite includes normal-workflow console/page-error zero assertions, dialog reachability and isolated temporary servers.
+
+All requested fresh checks passed before the local follow-up commit `fix: reject null calendar statuses`. Existing runner warnings and tall-calendar final-QA notes remain nonblocking and untouched. Stop here for controller review; no PHASE 5 advancement.

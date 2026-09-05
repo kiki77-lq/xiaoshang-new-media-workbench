@@ -4,6 +4,41 @@ import { phase4Server } from '../helpers/phase4-api.js';
 import { getDashboard } from '../../server/services/dashboard-service.js';
 
 const draft = {eventType:'publish',title:'发布 XT5',startsAt:'2026-09-12T00:30:00+08:00'};
+for (const method of ['POST','PATCH']) test(`calendar ${method} rejects explicit null status without changing records or versions`,async(t)=>{
+  const s=await phase4Server(t);
+  const created=await s.call('/calendar-events',{method:'POST',key:'confirmed',body:{...draft,publicationId:s.content.publications[0].id,status:'confirmed'}});
+  assert.equal(created.status,201);
+  assert.equal(created.data.status,'confirmed');
+  const beforeEvents=await s.events();
+  const beforeContent=await s.current();
+  const auditCount=s.db.prepare('SELECT count(*) n FROM audit_log').get().n;
+  const keyCount=s.db.prepare('SELECT count(*) n FROM idempotency_keys').get().n;
+  const path=method==='POST'?'/calendar-events':`/calendar-events/${created.data.id}`;
+  const body=method==='POST'
+    ? {...draft,publicationId:s.content.publications[1].id,status:null}
+    : {version:created.data.version,status:null};
+  const rejected=await s.call(path,{method,key:method==='POST'?'null-status':undefined,body});
+  assert.equal(rejected.status,400);
+  assert.equal(rejected.error.code,'VALIDATION_ERROR');
+  assert.ok(rejected.error.details.some(detail=>detail.field==='status'));
+  assert.deepEqual(await s.events(),beforeEvents);
+  assert.deepEqual(await s.current(),beforeContent);
+  assert.equal(s.db.prepare('SELECT count(*) n FROM audit_log').get().n,auditCount);
+  assert.equal(s.db.prepare('SELECT count(*) n FROM idempotency_keys').get().n,keyCount);
+
+  // Omission still defaults only on creation; PATCH omission preserves confirmed.
+  if(method==='POST') {
+    const omitted=await s.call('/calendar-events',{method:'POST',key:'null-status',body:{...draft,publicationId:s.content.publications[1].id}});
+    assert.equal(omitted.status,201);
+    assert.equal(omitted.data.status,'planned');
+  } else {
+    const omitted=await s.call(path,{method:'PATCH',body:{version:created.data.version,notes:'仅更新备注'}});
+    assert.equal(omitted.status,200);
+    assert.equal(omitted.data.status,'confirmed');
+    assert.equal(omitted.data.version,created.data.version+1);
+  }
+});
+
 test('calendar publish POST is idempotent, uniquely scheduled and synchronizes PATCH and version-checked audited DELETE', async (t) => {
   const s = await phase4Server(t);
   const body = {...draft,publicationId:s.content.publications[0].id};

@@ -15,7 +15,10 @@ function validate(input,partial=false) {
   if(!partial || Object.hasOwn(input,'startsAt')) values.startsAt=timestamp(input.startsAt,'startsAt');
   if(Object.hasOwn(input,'endsAt')) values.endsAt=timestamp(input.endsAt,'endsAt',{nullable:true});
   if(Object.hasOwn(input,'notes')) values.notes=optionalString(input.notes,'notes',5000);
-  if(!partial || Object.hasOwn(input,'status')) values.status=enumValue(input.status,'status',EVENT_STATUSES,'planned');
+  if(!partial || Object.hasOwn(input,'status')) {
+    const status=!partial && input.status===undefined?'planned':input.status;
+    values.status=enumValue(status,'status',EVENT_STATUSES);
+  }
   if(!partial) {
     values.eventType=enumValue(input.eventType,'eventType',EVENT_TYPES);
     values.contentId=optionalString(input.contentId,'contentId',100);
