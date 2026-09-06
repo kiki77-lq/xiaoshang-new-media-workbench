@@ -20,13 +20,14 @@ test('evidence badges label inference explicitly, unknown is not observed', () =
   assert.doesNotMatch(evidenceBadge('unexpected'), /原始数据/);
 });
 test('series renderer draws only supplied finite points, includes accessible values and escapes labels', () => {
-  assert.doesNotMatch(renderSeries([], '留存'), /<svg/);
+  // Decorative Lucide SVGs are allowed; data charts have the accessible img role.
+  assert.doesNotMatch(renderSeries([], '留存'), /<svg[^>]*role="img"/);
   const html = renderSeries([{label:'<script>',value:.5,unit:'ratio',evidenceLevel:'observed'}], '留存');
-  assert.match(html, /<svg/);
+  assert.match(html, /<svg[^>]*role="img"/);
   assert.match(html, /50%/);
   assert.match(html, /&lt;script&gt;/);
   assert.doesNotMatch(html, /<script>/);
-  assert.doesNotMatch(renderSeries([{value:NaN}], '空'), /<svg/);
+  assert.doesNotMatch(renderSeries([{value:NaN}], '空'), /<svg[^>]*role="img"/);
 });
 test('series uses actual numeric time spacing rather than evenly spacing irregular seconds', () => {
   const html=renderSeries([{position:0,value:10},{position:1,value:8},{position:10,value:2}], '留存');
@@ -63,5 +64,5 @@ test('review separates observed metrics from inferred findings and does not fabr
   assert.match(html, /虚构CSV/);
   assert.match(html, /&lt;unsafe&gt;/);
   assert.match(html, /样本有限/);
-  assert.doesNotMatch(html, /<svg/);
+  assert.doesNotMatch(html, /<svg[^>]*role="img"/);
 });

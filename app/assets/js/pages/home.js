@@ -1,4 +1,5 @@
-import { emptyState, escapeHtml, pageHeader, statCard } from "../shared/dom.js";
+import { platformMark } from '../components/platform-mark.js';
+import { emptyState, escapeHtml, pageHeader, statCard, icon } from "../shared/dom.js";
 
 const CONTENT_STATUS = { preparing: "准备中", producing: "制作中", ready: "待发布", published: "已发布" };
 const PUBLICATION_STATUS = { not_started: "未开始", preparing: "准备中", producing: "制作中", ready: "待发布", scheduled: "已排期", published: "已发布" };
@@ -6,11 +7,11 @@ const PUBLICATION_STATUS = { not_started: "未开始", preparing: "准备中", p
 function renderPlatform(platform, index, recentContents) {
   const publications = recentContents.flatMap((content) => content.publications || []).filter((publication) => publication.platformCode === platform.code);
   const completed = publications.filter((publication) => publication.status === "published").length;
-  return `<article class="platform-card"><div><span class="platform-logo platform-${index}">${escapeHtml(platform.displayName.slice(0, 1))}</span><strong>${escapeHtml(platform.displayName)}</strong></div><span class="status-badge ${platform.enabled ? "badge-success" : "status-muted"}">${platform.enabled ? "已启用" : "未启用"}</span><p>最近内容状态</p><b>${publications.length ? escapeHtml(PUBLICATION_STATUS[publications[0].status] || publications[0].status) : "—"}</b><small>最近 ${publications.length} 条 · 已发布 ${completed}</small></article>`;
+  return `<article class="platform-card"><div><span class="platform-logo platform-${index}">${platformMark(platform.displayName)}</span><strong>${escapeHtml(platform.displayName)}</strong></div><span class="status-badge ${platform.enabled ? "badge-success" : "status-muted"}">${platform.enabled ? "已启用" : "未启用"}</span><p>最近内容状态</p><b>${publications.length ? escapeHtml(PUBLICATION_STATUS[publications[0].status] || publications[0].status) : "—"}</b><small>最近 ${publications.length} 条 · 已发布 ${completed}</small></article>`;
 }
 
 function renderRecent(content) {
-  return `<article class="recent-content" data-recent-content="${escapeHtml(content.id)}"><div><span class="content-symbol">▣</span><div><strong>${escapeHtml(content.title)}</strong><small>${escapeHtml(CONTENT_STATUS[content.status] || content.status)}</small></div></div><div class="recent-publications">${(content.publications || []).map((publication) => `<span title="${escapeHtml(publication.platformName)}">${escapeHtml(publication.platformName.slice(0, 1))}<small>${escapeHtml(PUBLICATION_STATUS[publication.status] || publication.status)}</small></span>`).join("")}</div></article>`;
+  return `<article class="recent-content" data-recent-content="${escapeHtml(content.id)}"><div><span class="content-symbol">${icon('files')}</span><div><strong>${escapeHtml(content.title)}</strong><small>${escapeHtml(CONTENT_STATUS[content.status] || content.status)}</small></div></div><div class="recent-publications">${(content.publications || []).map((publication) => `<span title="${escapeHtml(publication.platformName)}">${platformMark(publication.platformName)}<small>${escapeHtml(PUBLICATION_STATUS[publication.status] || publication.status)}</small></span>`).join("")}</div></article>`;
 }
 
 export function renderHome({ data, loading = false, error = null } = {}) {

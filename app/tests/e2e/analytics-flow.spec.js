@@ -143,9 +143,9 @@ test('failed month switch hides stale KPI and mixed evidence stays visibly disti
     await expect(chart.locator('.chart-inference-warning')).toContainText('1小时（30）');
     await expect(chart.locator('.chart-inference-warning')).toBeVisible();
     await expect(chart.locator('line,polyline')).toHaveCount(0);
-    await expect(chart.locator('[data-point-evidence="inferred"]')).toHaveCSS('stroke','rgb(154, 107, 255)');
-    await expect(chart.locator('[data-point-evidence="observed"]')).toHaveCSS('fill','rgb(36, 214, 154)');
-    await expect(chart.locator('[data-point-evidence="derived"]')).toHaveCSS('fill','rgb(19, 200, 245)');
+    await expect(chart.locator('[data-point-evidence="inferred"]')).toHaveCSS('stroke','rgb(117, 89, 168)');
+    await expect(chart.locator('[data-point-evidence="observed"]')).toHaveCSS('fill','rgb(20, 118, 79)');
+    await expect(chart.locator('[data-point-evidence="derived"]')).toHaveCSS('fill','rgb(37, 99, 235)');
     await shot(page,`${viewport.name}-mixed-evidence`);
   }
 });

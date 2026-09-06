@@ -6,8 +6,8 @@
 .calendar-weekdays span { height: 38px; display: grid; place-items: center; border-right: 1px solid var(--border-soft); color: var(--muted); font-size: 11px; }
 .calendar-day { position: relative; min-width: 0; min-height: 82px; padding: 9px; border: 0; border-top: 1px solid var(--border-soft); border-right: 1px solid var(--border-soft); background: transparent; text-align: left; cursor: pointer; }
 .calendar-day:hover { background: var(--panel-2); }
-.calendar-day.is-outside { color: #4c5962; background: rgba(3, 6, 9, .24); }
-.calendar-day.is-today .day-number { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; color: #001116; background: var(--accent); font-weight: 700; }
+.calendar-day.is-outside { color: var(--text-tertiary); background: var(--surface-subtle); }
+.calendar-day.is-today .day-number { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; color: var(--on-accent); background: var(--accent); font-weight: 700; }
 .calendar-legend { min-height: 52px; padding: 0 18px; display: flex; align-items: center; gap: 22px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11px; }
 .calendar-legend span { display: flex; align-items: center; gap: 7px; }
 .calendar-legend i { width: 8px; height: 8px; display: inline-block; padding: 0; border-radius: 50%; }
@@ -18,7 +18,7 @@
 .calendar-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .calendar-toolbar { flex-wrap: wrap; gap: 8px; padding-top: 10px; padding-bottom: 10px; }
 .calendar-month-picker { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
-.calendar-month-picker input { min-width: 0; max-width: 150px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); color: var(--text); padding: 6px; color-scheme: dark; }
+.calendar-month-picker input { min-width: 0; max-width: 150px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); color: var(--text); padding: 6px; color-scheme: light; }
 .calendar-day { vertical-align: top; display: flex; flex-direction: column; gap: 4px; min-height: 90px; }
 .calendar-event { display: block; max-width: 100%; width: 100%; min-width: 0; padding: 3px 4px; background: color-mix(in srgb, var(--event-color) 12%, transparent); border-left: 3px solid; border-radius: 3px; font-size: 10px; line-height: 1.4; }
 .calendar-event > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -1,4 +1,4 @@
-import { emptyState, escapeHtml, pageHeader, statCard } from '../shared/dom.js';
+import { emptyState, escapeHtml, pageHeader, statCard, icon } from '../shared/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 import { showFormError } from '../shared/forms.js';
@@ -10,9 +10,9 @@ function observationCard(item) {
 }
 export function renderObservations({data,error,loading,filters={}}={}) {
   const items=data?.items || [], stats=data?.stats || {};
-  return `<section class="page page-observations">${pageHeader('热点 / 竞品观察','手动记录来源，先判断，再收入灵感','<button class="btn btn-primary" data-new-observation>＋ 新增观察</button>')}
+  return `<section class="page page-observations">${pageHeader('热点 / 竞品观察','手动记录来源，先判断，再收入灵感',`<button class="btn btn-primary" data-new-observation aria-label="＋ 新增观察">${icon('plus')}新增观察</button>`)}
     <div class="stats-grid stats-four">${statCard('今日新热点','danger','♨','按上海时间',stats.todayHotspots ?? '—')}${statCard('高热趋势','warning','↗','人工热度 ≥ 70',stats.highHeat ?? '—')}${statCard('待老板判断','pending','♙','待判断候选',stats.pending ?? '—')}${statCard('本周转入灵感','success','◉','按实际转入时间',stats.weekConverted ?? '—')}</div>
-    <section class="content-section filter-panel"><label class="search-control"><span>⌕</span><input type="search" data-observation-search value="${escapeHtml(filters.search || '')}" placeholder="搜索观察标题、品牌…"></label><div class="chips">${[['all','全部'],...Object.entries(labels)].map(([value,label])=>`<button class="chip${(filters.status || 'all')===value?' active':''}" data-observation-filter="${value}">${label}</button>`).join('')}</div></section>
+    <section class="content-section filter-panel"><label class="search-control"><span>${icon('search')}</span><input type="search" data-observation-search value="${escapeHtml(filters.search || '')}" placeholder="搜索观察标题、品牌…"></label><div class="chips">${[['all','全部'],...Object.entries(labels)].map(([value,label])=>`<button class="chip${(filters.status || 'all')===value?' active':''}" data-observation-filter="${value}">${label}</button>`).join('')}</div></section>
     ${error?`<div role="alert" class="quality-warning">${escapeHtml(error.message)} ${escapeHtml(error.requestId || '')}</div>`:''}${loading?'<p role="status">正在读取本地观察…</p>':''}
     <div class="observations-grid">${[['hotspot','热点雷达'],['competitor','竞品观察']].map(([kind,title])=>`<section class="content-section"><div class="section-heading"><div><h2>${title}</h2><p>候选来自人工或 WorkBuddy，不运行爬虫</p></div></div>${items.filter(i=>i.kind===kind).map(observationCard).join('') || emptyState('暂无观察记录','可新增带来源的候选，再决定是否收入灵感。','◎')}</section>`).join('')}</div></section>`;
 }

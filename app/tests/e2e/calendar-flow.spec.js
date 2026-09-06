@@ -89,7 +89,7 @@ for(const viewport of [{width:1440,height:900,name:'desktop'},{width:390,height:
     }
     await expect(page.locator('.calendar-grid [data-event-type="publish"]')).toHaveCount(3);
     await expect(page.locator('[data-calendar-day="2026-09-12"]')).toContainText('抖音');
-    for(const [type,color] of [['publish','rgb(255, 77, 95)'],['shoot','rgb(47, 140, 255)'],['pending_confirmation','rgb(154, 107, 255)']]) {
+    for(const [type,color] of [['publish','rgb(201, 65, 65)'],['shoot','rgb(37, 99, 235)'],['pending_confirmation','rgb(117, 89, 168)']]) {
       await expect(page.locator(`.calendar-grid [data-event-type="${type}"]`).first()).toHaveCSS('border-left-color',color);
     }
     await screenshot(page,`${viewport.name}-calendar`);

@@ -10,7 +10,7 @@ test('calendar renders persisted event types with exact colors and publish-only 
   ]}});
   assert.match(html,/2026年10月/);
   assert.match(html,/发布 XT5/);
-  for(const color of ['#ff4d5f','#2f8cff','#9a6bff']) assert.ok(html.includes(color),color);
+  for(const color of ['var(--danger)','var(--info)','var(--pending)']) assert.ok(html.includes(color),color);
   assert.match(html,/data-calendar-day="2026-10-01"[^>]*>[\s\S]*?发布 XT5/);
   assert.doesNotMatch(html,/Todo|Reminder|Meeting|后续阶段|基础 Modal/);
 });

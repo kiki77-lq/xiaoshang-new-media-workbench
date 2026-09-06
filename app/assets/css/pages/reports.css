@@ -7,7 +7,7 @@
 .report-list { padding-left:18px; line-height:1.9; overflow-wrap:anywhere; }
 .report-list li { margin:8px 0; }
 .report-card { min-height:200px; }
-.report-markdown pre { white-space:pre-wrap; overflow-wrap:anywhere; border:1px solid var(--border); background:var(--panel); padding:16px; border-radius:12px; }
+.report-markdown pre { white-space:pre-wrap; overflow-wrap:anywhere; border:1px solid var(--border); background:var(--panel); padding:16px; border-radius: var(--radius-card); }
 [data-report-save] .report-grid,[data-report-save] .stats-grid { grid-template-columns:1fr; }
 [data-report-save] .report-card { min-height:0; }
 [data-report-save] .report-markdown { display:none; }

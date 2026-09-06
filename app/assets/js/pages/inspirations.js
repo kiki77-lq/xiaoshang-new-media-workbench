@@ -1,6 +1,6 @@
 import { closeModal, openModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
-import { emptyState, escapeHtml, pageHeader, statCard } from "../shared/dom.js";
+import { emptyState, escapeHtml, pageHeader, statCard, icon } from "../shared/dom.js";
 import { serializeForm } from "../shared/forms.js";
 import { displayShanghai } from "../shared/format.js";
 
@@ -139,7 +139,7 @@ function renderCard(inspiration) {
   const status = STATUS_LABELS[inspiration.status] || inspiration.status;
   return `<article class="inspiration-card${inspiration.pinned ? " is-pinned" : ""}" data-inspiration-id="${escapeHtml(inspiration.id)}">
     <div class="inspiration-card-top">
-      <div class="inspiration-title"><span class="idea-icon">▤</span><div><div class="badge-row">${inspiration.pinned ? '<span class="status-badge badge-warning">★ 置顶</span>' : ""}<span class="status-badge status-${escapeHtml(inspiration.status)}">${escapeHtml(status)}</span>${inspiration.isFallbackTitle ? '<span class="status-badge status-muted">原话截取 · 未经 AI 整理</span>' : ""}</div><h3>${title}</h3></div></div>
+      <div class="inspiration-title"><span class="idea-icon">${icon('lightbulb')}</span><div><div class="badge-row">${inspiration.pinned ? `<span class="status-badge badge-warning">${icon('pin')}置顶</span>` : ""}<span class="status-badge status-${escapeHtml(inspiration.status)}">${escapeHtml(status)}</span>${inspiration.isFallbackTitle ? '<span class="status-badge status-muted">原话截取 · 未经 AI 整理</span>' : ""}</div><h3>${title}</h3></div></div>
       <div class="card-actions"><button class="btn btn-secondary" type="button" data-edit-inspiration="${escapeHtml(inspiration.id)}" aria-label="编辑灵感 ${title}">编辑</button>${inspiration.convertedContentId ? `<a class="btn btn-secondary" href="/contents?focus=${encodeURIComponent(inspiration.convertedContentId)}" data-route="contents">查看关联内容</a>` : `<button class="btn btn-primary" type="button" data-convert-inspiration="${escapeHtml(inspiration.id)}" aria-label="转为内容 ${title}">转为内容</button>`}</div>
     </div>
     <blockquote><span>老板原话</span>${escapeHtml(inspiration.rawText)}</blockquote>
@@ -162,9 +162,9 @@ export function renderInspirations({ data, loading = false, error = null, filter
   if (!loading && !error && !items.length) list = emptyState("还没有灵感记录", "点击“新增灵感”，老板原话会安全保存在本地 SQLite。", "✦");
 
   return `<section class="page page-inspirations">
-    ${pageHeader("灵感备忘", "保留老板原话，再逐步整理为可执行内容", '<button class="btn btn-primary" type="button" data-new-inspiration>＋ 新增灵感</button>')}
+    ${pageHeader("灵感备忘", "保留老板原话，再逐步整理为可执行内容", `<button class="btn btn-primary" type="button" data-new-inspiration aria-label="＋ 新增灵感">${icon('plus')}新增灵感</button>`)}
     <div class="stats-grid stats-three">${statCard("近 7 天新增", "accent", "✎", "当前筛选结果", weekCount)}${statCard("待整理", "pending", "⌛", "仍是原话截取标题", pendingCount)}${statCard("已转内容", "success", "✓", "保留原灵感记录", convertedCount)}</div>
-    <section class="content-section filter-panel"><label class="search-control"><span>⌕</span><input type="search" data-inspiration-search placeholder="搜索灵感、标签、来源…" value="${escapeHtml(filters.search || "")}"></label><div class="chips">${chips.map(([value, label]) => `<button class="chip${filter === value ? " active" : ""}" type="button" data-inspiration-filter="${value}">${label}</button>`).join("")}</div></section>
+    <section class="content-section filter-panel"><label class="search-control"><span>${icon('search')}</span><input type="search" data-inspiration-search placeholder="搜索灵感、标签、来源…" value="${escapeHtml(filters.search || "")}"></label><div class="chips">${chips.map(([value, label]) => `<button class="chip${filter === value ? " active" : ""}" type="button" data-inspiration-filter="${value}">${label}</button>`).join("")}</div></section>
     <section class="content-section inspiration-list">${list}</section>
   </section>`;
 }

@@ -1,6 +1,7 @@
+import { platformMark } from '../components/platform-mark.js';
 import { closeModal, openModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
-import { emptyState, escapeHtml, pageHeader, statCard } from "../shared/dom.js";
+import { emptyState, escapeHtml, pageHeader, statCard, icon } from "../shared/dom.js";
 import { serializeForm, showFormError } from "../shared/forms.js";
 import { shanghaiDateTime, shanghaiInputToUtc, displayShanghai } from '../shared/format.js';
 
@@ -155,7 +156,7 @@ function openContentDetail(content, controls) {
 
 function renderContentRow(content) {
   return `<article class="content-row" data-content-row="${escapeHtml(content.id)}">
-    <div class="content-main"><span class="content-symbol">▣</span><div><h3>${escapeHtml(content.title)}</h3><p>${escapeHtml([content.brand, content.vehicleModel].filter(Boolean).join(" · ") || "未标注品牌车型")}</p>${content.tags?.length ? `<div class="tag-list">${content.tags.map((tag) => `<span># ${escapeHtml(tag)}</span>`).join("")}</div>` : ""}</div></div>
+    <div class="content-main"><span class="content-symbol">${icon('files')}</span><div><h3>${escapeHtml(content.title)}</h3><p>${escapeHtml([content.brand, content.vehicleModel].filter(Boolean).join(" · ") || "未标注品牌车型")}</p>${content.tags?.length ? `<div class="tag-list">${content.tags.map((tag) => `<span># ${escapeHtml(tag)}</span>`).join("")}</div>` : ""}</div></div>
     <span class="status-badge type-${escapeHtml(content.contentType)}">${escapeHtml(TYPE_LABELS[content.contentType])}</span>
     <span class="status-badge content-${escapeHtml(content.status)}">${escapeHtml(STATUS_LABELS[content.status])}</span>
     <span class="source-count">${content.sourceInspirationIds?.length ? `${content.sourceInspirationIds.length} 条灵感` : "手动创建"}</span>
@@ -174,8 +175,8 @@ export function renderContents({ data, loading = false, error = null, filters = 
   const status = filters.status || "all";
   const contentType = filters.contentType || "all";
   return `<section class="page page-contents">
-    ${pageHeader("内容库", "从制作到四平台发布统一管理", '<button class="btn btn-primary" type="button" data-new-content>＋ 新增内容</button>')}
-    <section class="content-section content-toolbar"><label class="search-control"><span>⌕</span><input type="search" data-content-search placeholder="搜索标题、标签、品牌…" value="${escapeHtml(filters.search || "")}"></label><div class="toolbar-filters"><div class="chips">${[["all", "全部"], ...Object.entries(STATUS_LABELS)].map(([value, label]) => `<button class="chip${status === value ? " active" : ""}" type="button" data-content-status="${value}">${label}</button>`).join("")}</div><div class="chips">${[["all", "全部类型"], ...Object.entries(TYPE_LABELS)].map(([value, label]) => `<button class="chip${contentType === value ? " active" : ""}" type="button" data-content-type="${value}">${label}</button>`).join("")}</div></div></section>
+    ${pageHeader("内容库", "从制作到四平台发布统一管理", `<button class="btn btn-primary" type="button" data-new-content aria-label="＋ 新增内容">${icon('plus')}新增内容</button>`)}
+    <section class="content-section content-toolbar"><label class="search-control"><span>${icon('search')}</span><input type="search" data-content-search placeholder="搜索标题、标签、品牌…" value="${escapeHtml(filters.search || "")}"></label><div class="toolbar-filters"><div class="chips">${[["all", "全部"], ...Object.entries(STATUS_LABELS)].map(([value, label]) => `<button class="chip${status === value ? " active" : ""}" type="button" data-content-status="${value}">${label}</button>`).join("")}</div><div class="chips">${[["all", "全部类型"], ...Object.entries(TYPE_LABELS)].map(([value, label]) => `<button class="chip${contentType === value ? " active" : ""}" type="button" data-content-type="${value}">${label}</button>`).join("")}</div></div></section>
     <div class="stats-grid stats-four">${statCard("准备中", "accent", "▤", "当前筛选结果", statusCounts.preparing)}${statCard("制作中", "pending", "▷", "当前筛选结果", statusCounts.producing)}${statCard("待发布", "warning", "◷", "当前筛选结果", statusCounts.ready)}${statCard("已发布", "success", "✓", "当前筛选结果", statusCounts.published)}</div>
     <section class="content-section content-table"><div class="table-head"><span>内容信息</span><span>类型</span><span>整体状态</span><span>灵感来源</span><span>平台发布状态</span><span>操作</span></div><div class="content-list">${list}</div></section>
   </section>`;

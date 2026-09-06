@@ -1,10 +1,10 @@
 import { closeModal, openModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
-import { emptyState, escapeHtml, pageHeader, statCard } from '../shared/dom.js';
+import { emptyState, escapeHtml, pageHeader, statCard, icon } from '../shared/dom.js';
 import { formatMonth, shanghaiDate, shanghaiDateTime, shanghaiInputToUtc, shiftDate, displayShanghai } from '../shared/format.js';
 import { showFormError } from '../shared/forms.js';
 
-export const CALENDAR_COLORS = Object.freeze({publish:'#ff4d5f',shoot:'#2f8cff',pending_confirmation:'#9a6bff'});
+export const CALENDAR_COLORS = Object.freeze({publish:'var(--danger)',shoot:'var(--info)',pending_confirmation:'var(--pending)'});
 const TYPES = {shoot:'拍摄 / 项目安排',publish:'发布',pending_confirmation:'待确认'};
 const STATUSES = {planned:'已计划',confirmed:'已确认',completed:'已完成',cancelled:'已取消'};
 
@@ -46,11 +46,11 @@ export function renderCalendar({now=new Date(),calendarDate=now,data,loading=fal
   const active=inMonth.filter(e=>!['completed','cancelled'].includes(e.status));
   const count=type=>!loading && !error?String(active.filter(e=>e.eventType===type).length):'—';
   return `<section class="page page-calendar" data-calendar-year="${year}" data-calendar-month="${month-1}">
-    ${pageHeader('发布日历','拍摄、发布与待确认 · 所有时间均为上海时间','<button class="btn btn-primary" type="button" data-new-event>＋ 新增安排</button>')}
+    ${pageHeader('发布日历','拍摄、发布与待确认 · 所有时间均为上海时间',`<button class="btn btn-primary" type="button" data-new-event aria-label="＋ 新增安排">${icon('plus')}新增安排</button>`)}
     <div class="stats-grid stats-four">${statCard('本月待发布','danger','➤','尚未完成的发布排期',count('publish'))}${statCard('本月拍摄','info','▦','尚未完成的拍摄安排',count('shoot'))}${statCard('本月待确认','pending','?','等待确认的安排',count('pending_confirmation'))}${statCard('本月已发布','accent','✓','保留已发布历史',loading||error?'—':String(inMonth.filter(e=>e.eventType==='publish'&&e.status==='completed').length))}</div>
     <div class="calendar-filters" aria-label="安排类型筛选">${[['all','全部安排'],...Object.entries(TYPES)].map(([code,label])=>`<button type="button" class="chip${(filters.eventType||'all')===code?' is-active':''}" data-event-filter="${code}" aria-pressed="${(filters.eventType||'all')===code}">${label}</button>`).join('')}</div>
     ${loading?'<p data-calendar-loading role="status">正在读取安排…</p>':''}${error?`<p role="alert">安排读取失败：${escapeHtml(error.message)} <button type="button" class="btn btn-secondary" data-calendar-retry>重试</button></p>`:''}
-    <div class="calendar-layout"><section class="content-section calendar-panel" aria-label="发布月历"><div class="calendar-toolbar"><div><button class="icon-button" data-calendar-action="prev" aria-label="上个月">‹</button><strong>${formatMonth(calendarDate)}</strong><button class="icon-button" data-calendar-action="next" aria-label="下个月">›</button></div><button class="btn btn-secondary" data-calendar-action="today">今天</button><label class="calendar-month-picker"><span>显示月份</span><input type="month" data-month-picker value="${monthValue}"></label></div>
+    <div class="calendar-layout"><section class="content-section calendar-panel" aria-label="发布月历"><div class="calendar-toolbar"><div><button class="icon-button" data-calendar-action="prev" aria-label="上个月">${icon('chevron-left')}</button><strong>${formatMonth(calendarDate)}</strong><button class="icon-button" data-calendar-action="next" aria-label="下个月">${icon('chevron-right')}</button></div><button class="btn btn-secondary" data-calendar-action="today">今天</button><label class="calendar-month-picker"><span>显示月份</span><input type="month" data-month-picker value="${monthValue}"></label></div>
     <div class="calendar-weekdays">${['周一','周二','周三','周四','周五','周六','周日'].map(day=>`<span>${day}</span>`).join('')}</div>
     <div class="calendar-grid">${days.map(day=>{
       const entries=events.filter(e=>shanghaiDate(e.startsAt)===day.isoDate);

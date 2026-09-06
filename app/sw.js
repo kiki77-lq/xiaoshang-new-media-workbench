@@ -1,6 +1,13 @@
 /* 新媒体运营工作台 — Service Worker（离线缓存 App 外壳） */
-const CACHE = "xiaoshang-shell-v8";
+const CACHE = "xiaoshang-shell-v9";
 const ASSETS = [
+  "/assets/js/components/icons.js",
+  "/assets/js/components/platform-mark.js",
+  "/assets/icons/workbench.svg",
+  "/assets/brands/douyin.ico",
+  "/assets/brands/wechat_channels.ico",
+  "/assets/brands/xiaohongshu.png",
+  "/assets/brands/weibo.ico",
   "/",
   "/index.html",
   "/assets/css/tokens.css",

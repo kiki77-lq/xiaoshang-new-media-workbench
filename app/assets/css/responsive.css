@@ -8,17 +8,17 @@
 @media (max-width: 760px) {
   :root { --topbar-height: 68px; }
   body { font-size: 13px; }
-  .sidebar { width: min(82vw, 290px); transform: translateX(-105%); transition: transform 180ms ease; box-shadow: 24px 0 70px rgba(0,0,0,.45); }
+  .sidebar { width: min(82vw, 290px); transform: translateX(-105%); transition: transform 180ms ease; box-shadow: var(--shadow-overlay); }
   .sidebar.is-open { transform: translateX(0); }
-  .sidebar-scrim { position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,.62); }
+  .sidebar-scrim { position: fixed; inset: 0; z-index: 25; background: var(--scrim); }
   .sidebar-scrim.is-visible { display: block; }
   .workspace { margin-left: 0; }
   .topbar { height: var(--topbar-height); padding: 10px 14px; justify-content: space-between; }
   .mobile-menu { display: inline-grid; flex: 0 0 auto; }
   .global-search { width: auto; min-width: 0; flex: 1; height: 42px; }
   .global-search small { display: none; }
-  .topbar > .btn { width: 42px; min-width: 42px; height: 42px; padding: 0; overflow: hidden; font-size: 0; display: grid; place-items: center; }
-  .topbar > .btn::before { content: '＋'; color: #001116; font-size: 20px; line-height: 1; }
+  .topbar > .btn { width: 42px; min-width: 42px; height: 42px; padding: 0; overflow: hidden; font-size: 0; display: flex; align-items: center; justify-content: center; gap: 0; }
+  .topbar > .btn .button-label { display: none; }
   .topbar > .btn .future-tag { display: none; }
   #page-outlet { padding: 16px 14px calc(28px + env(safe-area-inset-bottom)); }
   .page-header { min-height: 62px; margin-bottom: 18px; display: block; }
@@ -42,7 +42,7 @@
   .calendar-toolbar { padding: 0 10px; }
   .calendar-toolbar strong { margin-left: 2px; font-size: 14px; }
   .calendar-day { min-height: 58px; padding: 6px; }
-  .calendar-weekdays span { height: 34px; font-size: 10px; }
+  .calendar-weekdays span { height: 34px; font-size: 11px; }
   .calendar-legend { height: auto; min-height: 52px; padding: 10px 13px; flex-wrap: wrap; gap: 8px 14px; }
   .chart-placeholder { min-height: 190px; }
   .chart-placeholder svg { height: 170px; }

@@ -1,4 +1,4 @@
-.observation-preview { margin-bottom: 16px; padding: 18px; display: grid; grid-template-columns: auto 1fr; gap: 14px; border: 1px solid var(--border); border-radius: 13px; background: #080e12; }
+.observation-preview { margin-bottom: 16px; padding: 18px; display: grid; grid-template-columns: auto 1fr; gap: 14px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
 .observation-preview .rank { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; font-weight: 700; }
 .observation-preview p { margin: 14px 0; }
 .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
