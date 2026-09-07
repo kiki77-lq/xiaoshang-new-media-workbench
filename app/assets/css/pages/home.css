@@ -11,3 +11,23 @@
 .recent-publications { display: grid; grid-template-columns: repeat(4, 44px); gap: 6px; }
 .recent-publications > span { min-width: 0; padding: 5px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 8px; color: var(--accent); background: var(--surface-subtle); font-size: 11px; }
 .recent-publications small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-summary-rail { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.home-summary-rail .empty-state { min-height: 96px; padding: 18px 14px; }
+.home-radar-list { display: grid; gap: 10px; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.home-radar-item { padding: 11px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-subtle); min-width: 0; }
+.home-radar-head { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+.home-radar-score { flex: none; min-width: 30px; padding: 2px 7px; text-align: center; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); background: var(--accent-soft); font-weight: 600; font-size: 12px; }
+.home-radar-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 500; font-size: 13px; }
+.home-radar-title:hover { color: var(--accent); }
+.home-competitor-meta { flex: none; max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
+.home-radar-head .home-radar-title { flex: 1 1 auto; }
+.home-radar-tags { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 5px; }
+.home-radar-tags span { padding: 1px 7px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 10px; }
+.home-radar-reason { margin: 7px 0 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.home-competitor-heading { margin-top: 16px; }
+.home-summary-link { margin-top: 10px; display: inline-block; color: var(--accent); font-size: 12px; font-weight: 500; }
+.home-summary-link:hover { color: var(--accent-hover); }
+@media (max-width: 860px) {
+  .home-summary-rail .empty-state { min-height: 76px; }
+  .home-radar-title { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+}

@@ -4095,7 +4095,7 @@ components:
         version: { type: integer, minimum: 1 }
     Dashboard:
       type: object
-      required: [monthContentCount, producingCount, todayPublishCount, needsAttentionCount, platforms, recentContents, hotspotSummary]
+      required: [monthContentCount, producingCount, todayPublishCount, needsAttentionCount, platforms, recentContents, hotspotSummary, competitorSummary]
       properties:
         monthContentCount: { type: integer, minimum: 0 }
         producingCount: { type: integer, minimum: 0 }
@@ -4116,7 +4116,31 @@ components:
             $ref: "#/components/schemas/Content"
         hotspotSummary:
           type: array
-          description: Up to five actual pending observations ordered by manual heat score and discovery time.
+          maxItems: 3
+          description: Up to three pending observations with kind=hotspot ordered by manual heat score then discovery time.
+          items:
+            $ref: "#/components/schemas/DashboardObservationSummary"
+        competitorSummary:
+          type: array
+          maxItems: 3
+          description: Up to three pending observations with kind=competitor ordered by discovery time, newest first.
+          items:
+            $ref: "#/components/schemas/DashboardObservationSummary"
+    DashboardObservationSummary:
+      type: object
+      required: [id, title, kind]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        kind: { type: string, enum: [hotspot, competitor] }
+        heatScore: { type: [number, "null"], description: Manual 0-100 score, null when unset. }
+        worthReason: { type: [string, "null"] }
+        summary: { type: [string, "null"] }
+        competitorName: { type: [string, "null"] }
+        sourcePlatform: { type: [string, "null"] }
+        sourceUrl: { type: [string, "null"] }
+        discoveredAt: { type: string, format: date-time }
+        tags: { type: array, items: { type: string } }
   responses:
     SchedulingValidationError:
       description: 'VALIDATION_ERROR, VERSION_REQUIRED, REASON_REQUIRED, PUBLICATION_REQUIRED or IDEMPOTENCY_KEY_REQUIRED. Body fields, enums, positive integer versions, URLs, timestamps and endsAt are validated.'

@@ -8,6 +8,7 @@ import { updateInspirationRecord } from "../../server/repositories/inspiration-r
 import { createInspiration } from "../../server/services/inspiration-service.js";
 import { convertInspiration } from "../../server/services/inspiration-service.js";
 import { createContent, updateContent } from "../../server/services/content-service.js";
+import { createObservation } from "../../server/services/observation-service.js";
 import { getDashboard } from "../../server/services/dashboard-service.js";
 import { createTempWorkbench } from "../helpers/temp-workbench.js";
 
@@ -195,6 +196,30 @@ test("dashboard aggregates contents once instead of once per publication", async
   assert.equal(dashboard.recentContents.every((content) => content.publications.length === 4), true);
   assert.equal(new Set(dashboard.recentContents.map(({ id }) => id)).size, 3);
   assert.deepEqual(dashboard.hotspotSummary, []);
+  assert.deepEqual(dashboard.competitorSummary, []);
   assert.equal(dashboard.todayPublishCount, 0);
   assert.equal(dashboard.needsAttentionCount, 0);
+});
+
+test("dashboard splits hotspot and competitor summaries without cross-contamination", async (t) => {
+  const base = setup(t, "2026-09-05T04:00:00.000Z");
+  const make = async (input, key) => createObservation(input, { ...base, idempotencyKey: key, actor: "workbuddy", key });
+  await make({ kind: "hotspot", title: "机会甲", sourceUrl: "https://example.com/a", sourcePlatform: "other", worthReason: "甲理由", heatScore: 90, discoveredAt: "2026-09-05T01:00:00.000Z", tags: ["车型机会", "可拍性高"] }, "dual-sum-h1");
+  await make({ kind: "hotspot", title: "机会乙", sourceUrl: "https://example.com/b", sourcePlatform: "other", worthReason: "乙理由", heatScore: 75, discoveredAt: "2026-09-05T02:00:00.000Z", tags: [] }, "dual-sum-h2");
+  await make({ kind: "competitor", title: "竞品讯号一", competitorName: "某博主", sourceUrl: "https://example.com/c", sourcePlatform: "douyin", worthReason: "涨粉明显", summary: "单条跑出", discoveredAt: "2026-09-04T01:00:00.000Z", tags: ["爆款信号"] }, "dual-sum-c1");
+  await make({ kind: "competitor", title: "竞品讯号二", competitorName: "另一博主", sourceUrl: "https://example.com/d", sourcePlatform: "xiaohongshu", worthReason: "押注老车", discoveredAt: "2026-09-05T03:00:00.000Z", tags: ["内容方向变化"] }, "dual-sum-c2");
+
+  const dashboard = getDashboard({ db: base.db, now: "2026-09-05T04:00:00.000Z" });
+  assert.equal(dashboard.hotspotSummary.length, 2);
+  assert.ok(dashboard.hotspotSummary.every((item) => item.kind === "hotspot"));
+  assert.equal(dashboard.hotspotSummary[0].title, "机会甲");
+  assert.equal(dashboard.hotspotSummary[0].heatScore, 90);
+  assert.deepEqual(dashboard.hotspotSummary[0].tags, ["可拍性高", "车型机会"]);
+  assert.ok(dashboard.hotspotSummary[0].sourceUrl.startsWith("https://example.com/"));
+  assert.equal(dashboard.competitorSummary.length, 2);
+  assert.ok(dashboard.competitorSummary.every((item) => item.kind === "competitor"));
+  assert.equal(dashboard.competitorSummary[0].title, "竞品讯号二");
+  assert.equal(dashboard.competitorSummary[0].competitorName, "另一博主");
+  assert.equal(dashboard.competitorSummary[0].sourcePlatform, "xiaohongshu");
+  assert.equal(dashboard.competitorSummary[1].title, "竞品讯号一");
 });
