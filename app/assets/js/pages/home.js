@@ -35,14 +35,17 @@ export function renderHome({ data, loading = false, error = null } = {}) {
   const metric = (value) => knownValues ? String(value ?? 0) : "—";
   let recent = recentContents.map(renderRecent).join("");
   if (loading) recent = '<div class="loading-state">正在聚合本地数据…</div>';
-  if (error) recent = emptyState("首页数据读取失败", error.message || "请确认本地服务正在运行。", "!");
+  if (error) recent = emptyState("首页数据读取失败", escapeHtml(error.message || "请确认本地服务正在运行。"), "!");
   if (knownValues && !recentContents.length) recent = emptyState("还没有内容分发记录", "从灵感转为内容或直接新建内容后，这里会实时更新。", "▱");
   const radar = dashboard.hotspotSummary || [];
   const competitors = dashboard.competitorSummary || [];
-  const radarList = loading ? '<div class="loading-state">正在读取机会…</div>'
+  const readError = (label) => `<div role="alert">${emptyState(label + "读取失败", `请刷新页面重试。${error?.requestId ? ' Request ID：' + escapeHtml(error.requestId) : ''}`, "!")}</div>`;
+  const radarList = error ? readError("拍摄机会")
+    : loading ? '<div class="loading-state">正在读取机会…</div>'
     : radar.length ? radar.map(renderHotspotItem).join("")
     : emptyState("暂无值得关注的拍摄机会", "可在热点 / 竞品观察中记录候选车型或事件。", "◎");
-  const competitorList = loading ? '<div class="loading-state">正在读取竞品讯号…</div>'
+  const competitorList = error ? readError("竞品观察")
+    : loading ? '<div class="loading-state">正在读取竞品讯号…</div>'
     : competitors.length ? competitors.map(renderCompetitorItem).join("")
     : emptyState("暂无值得关注的竞品变化", "有可靠讯号时会显示在这里，不为凑数展示。", "◎");
 
@@ -61,7 +64,7 @@ export function renderHome({ data, loading = false, error = null } = {}) {
         <div class="section-heading"><div><h2>拍摄机会雷达</h2><p>当前最值得拍的 Top 3</p></div></div>
         <div class="home-radar-list">${radarList}</div>
         <a class="home-summary-link" href="/observations" data-route>查看机会 →</a>
-        <div class="section-heading home-competitor-heading"><div><h2>竞品观察</h2><p>最近值得注意的变化讯号</p></div></div>
+        <div class="section-heading home-competitor-heading"><div><h2>竞品观察</h2><p>最近值得注意的 Top 3 变化讯号</p></div></div>
         <div class="home-radar-list">${competitorList}</div>
         <a class="home-summary-link" href="/observations" data-route>查看竞品 →</a>
       </aside>

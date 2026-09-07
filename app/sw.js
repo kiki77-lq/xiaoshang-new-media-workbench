@@ -1,5 +1,5 @@
 /* 新媒体运营工作台 — Service Worker（离线缓存 App 外壳） */
-const CACHE = "xiaoshang-shell-v9";
+const CACHE = "xiaoshang-shell-v10";
 const ASSETS = [
   "/assets/js/components/icons.js",
   "/assets/js/components/platform-mark.js",

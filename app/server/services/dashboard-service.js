@@ -11,9 +11,9 @@ export function getDashboard({ db, now = new Date().toISOString() }) {
   const producingCount = db.prepare(`SELECT count(*) AS count FROM contents WHERE status = 'producing'`).get().count;
   const summarySelect = `SELECT o.id,o.title,o.kind,o.heat_score heatScore,o.worth_reason worthReason,o.ai_summary summary,
       o.competitor_name competitorName,o.source_platform sourcePlatform,o.source_url sourceUrl,o.discovered_at discoveredAt,
-      (SELECT group_concat(t.name, ',') FROM (SELECT tt.name FROM tags tt JOIN observation_tags ott ON ott.tag_id = tt.id WHERE ott.observation_id = o.id ORDER BY tt.name) t) tags
+      (SELECT json_group_array(t.name) FROM (SELECT tt.name FROM tags tt JOIN observation_tags ott ON ott.tag_id = tt.id WHERE ott.observation_id = o.id ORDER BY tt.name) t) tags
     FROM observations o WHERE o.status='pending'`;
-  const withTagArray = (rows) => rows.map((row) => ({ ...row, tags: row.tags ? row.tags.split(',') : [] }));
+  const withTagArray = (rows) => rows.map((row) => ({ ...row, tags: JSON.parse(row.tags) }));
   return {
     monthContentCount,
     producingCount,
